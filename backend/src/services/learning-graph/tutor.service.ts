@@ -18,7 +18,7 @@ export class TutorService {
     ];
 
     const result = await this.chatService.chat(messages, {
-      model: 'openai/gpt-4.1-mini',
+      model: 'google/gemini-2.0-flash-lite-001',
       temperature: 0.4,
     });
 

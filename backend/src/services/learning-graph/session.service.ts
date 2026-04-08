@@ -1,4 +1,5 @@
 import { DatabaseManager } from '@/infra/database/database.manager.js';
+import crypto from 'node:crypto';
 
 export interface LearningSessionRecord {
   id: string;
@@ -98,6 +99,109 @@ export class SessionService {
     );
 
     return result.rows[0];
+  }
+
+  async persistValidatedGraph(input: {
+    sessionId: string;
+    concepts: Array<{
+      tempId: string;
+      canonicalName: string;
+      displayName: string;
+      description: string;
+      difficulty: number;
+    }>;
+    edges: Array<{
+      fromTempId: string;
+      toTempId: string;
+      type: 'prerequisite';
+      weight: number;
+    }>;
+  }) {
+    const pool = this.db.getPool();
+    const conceptIdByTempId = new Map<string, string>();
+
+    for (const concept of input.concepts) {
+      const conceptId = crypto.randomUUID();
+      conceptIdByTempId.set(concept.tempId, conceptId);
+
+      await pool.query(
+        `INSERT INTO public.session_concepts
+          (id, session_id, canonical_name, display_name, description, difficulty)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          conceptId,
+          input.sessionId,
+          concept.canonicalName,
+          concept.displayName,
+          concept.description,
+          concept.difficulty,
+        ]
+      );
+    }
+
+    for (const edge of input.edges) {
+      const fromConceptId = conceptIdByTempId.get(edge.fromTempId);
+      const toConceptId = conceptIdByTempId.get(edge.toTempId);
+
+      if (!fromConceptId || !toConceptId) {
+        continue;
+      }
+
+      await pool.query(
+        `INSERT INTO public.session_edges
+          (id, session_id, from_concept_id, to_concept_id, edge_type, weight, source)
+         VALUES ($1, $2, $3, $4, $5, $6, 'validation')`,
+        [
+          crypto.randomUUID(),
+          input.sessionId,
+          fromConceptId,
+          toConceptId,
+          edge.type,
+          edge.weight,
+        ]
+      );
+    }
+
+    return { conceptIdByTempId };
+  }
+
+  async persistPathSnapshot(input: {
+    sessionId: string;
+    pathVersion: number;
+    items: Array<{
+      conceptId: string;
+      position: number;
+      pathState: 'completed' | 'current' | 'next' | 'upcoming' | 'locked';
+    }>;
+  }) {
+    const pool = this.db.getPool();
+
+    for (const item of input.items) {
+      await pool.query(
+        `INSERT INTO public.session_path_items
+          (id, session_id, concept_id, path_version, position, path_state, is_current)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+        [
+          crypto.randomUUID(),
+          input.sessionId,
+          item.conceptId,
+          input.pathVersion,
+          item.position,
+          item.pathState,
+        ]
+      );
+    }
+  }
+
+  async markSessionReady(input: { sessionId: string; currentConceptId: string | null }) {
+    await this.db.getPool().query(
+      `UPDATE public.learning_sessions
+       SET status = 'ready',
+           current_concept_id = $2,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [input.sessionId, input.currentConceptId]
+    );
   }
 
   async findSessionById(sessionId: string): Promise<LearningSessionRecord | null> {

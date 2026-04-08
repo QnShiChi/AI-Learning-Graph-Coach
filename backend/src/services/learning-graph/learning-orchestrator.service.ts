@@ -6,6 +6,9 @@ import { PathEngineService } from './path-engine.service.js';
 import { QuizService } from './quiz.service.js';
 import { SessionService } from './session.service.js';
 import { TutorService } from './tutor.service.js';
+import { AppError } from '@/api/middlewares/error.js';
+import { ERROR_CODES } from '@/types/error-constants.js';
+import logger from '@/utils/logger.js';
 
 export class LearningOrchestratorService {
   private inputNormalization = new InputNormalizationService();
@@ -29,6 +32,20 @@ export class LearningOrchestratorService {
     const rawGraph = await this.graphGeneration.generate(normalized.rawText);
     const validatedGraph = this.graphValidation.validate(rawGraph);
 
+    if (validatedGraph.concepts.length === 0) {
+      logger.warn('Learning graph generation produced no usable concepts', {
+        sessionId: session.id,
+        topic: input.topic,
+        rawGraphKeys: Object.keys(rawGraph),
+        edgeCount: validatedGraph.edges.length,
+      });
+      throw new AppError(
+        'Không thể tạo lộ trình học từ nội dung đã nhập. Hãy bổ sung tài liệu rõ hơn và thử lại.',
+        422,
+        ERROR_CODES.LEARNING_GRAPH_INVALID
+      );
+    }
+
     const pathSnapshot = this.pathEngine.buildSnapshot({
       concepts: validatedGraph.concepts.map((concept: DraftConcept) => ({
         id: concept.tempId,
@@ -45,14 +62,90 @@ export class LearningOrchestratorService {
       validatedGraph.concepts[0] ??
       null;
 
+    const persistedGraph = await this.sessionService.persistValidatedGraph({
+      sessionId: session.id,
+      concepts: validatedGraph.concepts,
+      edges: validatedGraph.edges,
+    });
+
+    const persistedPathItems = pathSnapshot.items
+      .map((item) => {
+        const conceptId = persistedGraph.conceptIdByTempId.get(item.conceptId);
+        if (!conceptId) {
+          return null;
+        }
+
+        return {
+          conceptId,
+          position: item.position,
+          pathState: item.pathState,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    const persistedCurrentConceptId = currentConcept
+      ? persistedGraph.conceptIdByTempId.get(currentConcept.tempId) ?? null
+      : null;
+
+    if (persistedPathItems.length === 0 || persistedCurrentConceptId === null) {
+      logger.error('Learning graph persistence produced no current concept', {
+        sessionId: session.id,
+        conceptCount: validatedGraph.concepts.length,
+        persistedPathItemCount: persistedPathItems.length,
+      });
+      throw new AppError(
+        'Không thể khởi tạo trạng thái phiên học. Hãy thử lại với nội dung khác.',
+        500,
+        ERROR_CODES.LEARNING_GRAPH_INVALID
+      );
+    }
+
+    await this.sessionService.persistPathSnapshot({
+      sessionId: session.id,
+      pathVersion: pathSnapshot.pathVersion,
+      items: persistedPathItems,
+    });
+
+    await this.sessionService.markSessionReady({
+      sessionId: session.id,
+      currentConceptId: persistedCurrentConceptId,
+    });
+
     return {
       session: {
-        ...session,
+        id: session.id,
+        userId: session.user_id,
+        goalTitle: session.goal_title,
+        sourceTopic: session.source_topic,
+        sourceText: session.source_text,
         status: 'ready' as const,
-        current_concept_id: currentConcept?.tempId ?? null,
+        currentConceptId: persistedCurrentConceptId,
+        createdAt: session.created_at,
+        updatedAt: session.updated_at,
       },
-      pathSnapshot: pathSnapshot.items,
-      currentConcept,
+      pathSnapshot: persistedPathItems.map((item) => ({
+        id: crypto.randomUUID(),
+        sessionId: session.id,
+        conceptId: item.conceptId,
+        pathVersion: pathSnapshot.pathVersion,
+        position: item.position,
+        pathState: item.pathState,
+        isCurrent: item.pathState === 'current',
+        supersededAt: null,
+        createdAt: session.created_at,
+      })),
+      currentConcept: currentConcept
+        ? {
+            id: persistedCurrentConceptId ?? currentConcept.tempId,
+            sessionId: session.id,
+            canonicalName: currentConcept.canonicalName,
+            displayName: currentConcept.displayName,
+            description: currentConcept.description,
+            difficulty: currentConcept.difficulty,
+            createdAt: session.created_at,
+            updatedAt: session.updated_at,
+          }
+        : null,
     };
   }
 
