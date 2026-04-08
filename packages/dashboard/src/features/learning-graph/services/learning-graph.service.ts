@@ -6,6 +6,7 @@ import type {
   GetConceptLearningResponseSchema,
   GetConceptQuizResponseSchema,
   GetLearningGraphResponseSchema,
+  GetLearningSessionLibraryResponseSchema,
   GetLearningSessionResponseSchema,
   SubmitConceptQuizRequestSchema,
   SubmitConceptQuizResponseSchema,
@@ -24,6 +25,12 @@ export class LearningGraphService {
 
   async getSessionOverview(sessionId: string): Promise<GetLearningSessionResponseSchema> {
     return apiClient.request(`/learning-sessions/${sessionId}`, {
+      headers: apiClient.withAccessToken(),
+    });
+  }
+
+  async listSessions(): Promise<GetLearningSessionLibraryResponseSchema> {
+    return apiClient.request('/learning-sessions', {
       headers: apiClient.withAccessToken(),
     });
   }
