@@ -1,19 +1,18 @@
 import { Button } from '@insforge/ui';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { KnowledgeGraphPanel } from '../components';
 import { useConceptLearning } from '../hooks/useConceptLearning';
 
 export default function KnowledgeGraphPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get('sessionId') ?? undefined;
+  const { sessionId } = useParams<{ sessionId: string }>();
   const { graph, isLoadingGraph } = useConceptLearning(sessionId);
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-8">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-medium text-foreground">Đồ thị kiến thức</h1>
+          <h2 className="text-2xl font-medium text-foreground">Đồ thị kiến thức</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Màn hình này dùng để trực quan hóa prerequisite và lộ trình học, không phải điều hướng chính.
           </p>
@@ -21,7 +20,7 @@ export default function KnowledgeGraphPage() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => navigate(`/dashboard/learning-graph${sessionId ? `?sessionId=${sessionId}` : ''}`)}
+          onClick={() => navigate(`/dashboard/learning-graph/sessions/${sessionId ?? ''}/overview`)}
         >
           Về tổng quan
         </Button>

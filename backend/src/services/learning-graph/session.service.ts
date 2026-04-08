@@ -47,6 +47,15 @@ interface SessionConceptDto {
   updatedAt: string;
 }
 
+interface SessionLibraryItemDto {
+  session: SessionDto;
+  progress: {
+    completedCount: number;
+    totalCount: number;
+  };
+  currentConcept: SessionConceptDto | null;
+}
+
 export class SessionService {
   private db = DatabaseManager.getInstance();
 
@@ -214,6 +223,17 @@ export class SessionService {
     return result.rows[0] ?? null;
   }
 
+  async findSessionByIdForUser(userId: string, sessionId: string): Promise<LearningSessionRecord | null> {
+    const result = await this.db.getPool().query<LearningSessionRecord>(
+      `SELECT *
+       FROM public.learning_sessions
+       WHERE user_id = $1 AND id = $2`,
+      [userId, sessionId]
+    );
+
+    return result.rows[0] ?? null;
+  }
+
   async getCurrentPathSnapshot(sessionId: string) {
     const result = await this.db.getPool().query(
       `SELECT id, session_id AS "sessionId", concept_id AS "conceptId", path_version AS "pathVersion",
@@ -336,6 +356,28 @@ export class SessionService {
       concepts: concepts.rows,
       edges: edges.rows,
     };
+  }
+
+  async listSessionLibraryItemsForUser(userId: string): Promise<SessionLibraryItemDto[]> {
+    const result = await this.db.getPool().query<LearningSessionRecord>(
+      `SELECT *
+       FROM public.learning_sessions
+       WHERE user_id = $1
+       ORDER BY updated_at DESC`,
+      [userId]
+    );
+
+    const items = await Promise.all(
+      result.rows.map(async (record) => ({
+        session: this.mapSession(record)!,
+        progress: await this.getProgressSummary(record.id),
+        currentConcept: this.mapConcept(await this.getCurrentConcept(record.id)),
+      }))
+    );
+
+    return items.sort(
+      (left, right) => Date.parse(right.session.updatedAt) - Date.parse(left.session.updatedAt)
+    );
   }
 
   async getSessionOverview(sessionId: string) {

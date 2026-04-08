@@ -20,6 +20,15 @@ export class LearningOrchestratorService {
   private quizService = new QuizService();
   private tutorService = new TutorService();
 
+  private async assertSessionAccess(userId: string, sessionId: string) {
+    const session = await this.sessionService.findSessionByIdForUser(userId, sessionId);
+    if (!session) {
+      throw new AppError('Không tìm thấy phiên học.', 404, ERROR_CODES.LEARNING_SESSION_NOT_FOUND);
+    }
+
+    return session;
+  }
+
   async createSession(input: { userId: string; topic: string; sourceText?: string }) {
     const normalized = this.inputNormalization.normalize(input.topic, input.sourceText);
     const session = await this.sessionService.createLearningSession({
@@ -191,15 +200,29 @@ export class LearningOrchestratorService {
     };
   }
 
-  async getSessionOverview(input: { sessionId: string }) {
+  async getSessionLibrary(input: { userId: string }) {
+    const sessions = (await this.sessionService.listSessionLibraryItemsForUser(input.userId)).sort(
+      (left, right) => Date.parse(right.session.updatedAt) - Date.parse(left.session.updatedAt)
+    );
+
+    return {
+      sessions,
+      spotlightSession: sessions[0] ?? null,
+    };
+  }
+
+  async getSessionOverview(input: { userId: string; sessionId: string }) {
+    await this.assertSessionAccess(input.userId, input.sessionId);
     return this.sessionService.getSessionOverview(input.sessionId);
   }
 
-  async getConceptLearning(input: { sessionId: string; conceptId: string }) {
+  async getConceptLearning(input: { userId: string; sessionId: string; conceptId: string }) {
+    await this.assertSessionAccess(input.userId, input.sessionId);
     return this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
   }
 
-  async generateExplanation(input: { sessionId: string; conceptId: string }) {
+  async generateExplanation(input: { userId: string; sessionId: string; conceptId: string }) {
+    await this.assertSessionAccess(input.userId, input.sessionId);
     const payload = await this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
     const explanation = await this.tutorService.generateExplanation({
       conceptName: payload.concept?.displayName ?? 'Khái niệm hiện tại',
@@ -214,7 +237,8 @@ export class LearningOrchestratorService {
     };
   }
 
-  async getOrCreateQuiz(input: { sessionId: string; conceptId: string }) {
+  async getOrCreateQuiz(input: { userId: string; sessionId: string; conceptId: string }) {
+    await this.assertSessionAccess(input.userId, input.sessionId);
     const payload = await this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
     const quiz = await this.quizService.getOrCreateActiveQuiz({
       sessionId: input.sessionId,
@@ -226,7 +250,8 @@ export class LearningOrchestratorService {
     return { quiz };
   }
 
-  async getGraph(input: { sessionId: string }) {
+  async getGraph(input: { userId: string; sessionId: string }) {
+    await this.assertSessionAccess(input.userId, input.sessionId);
     return this.sessionService.getGraph(input.sessionId);
   }
 }

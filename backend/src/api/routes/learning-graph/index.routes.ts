@@ -12,9 +12,22 @@ import { ERROR_CODES } from '@/types/error-constants.js';
 const router = Router();
 const orchestrator = new LearningOrchestratorService();
 
+router.get('/', verifyUser, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await orchestrator.getSessionLibrary({
+      userId: req.user!.id,
+    });
+
+    successResponse(res, result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:sessionId', verifyUser, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const result = await orchestrator.getSessionOverview({
+      userId: req.user!.id,
       sessionId: req.params.sessionId,
     });
 
@@ -30,6 +43,7 @@ router.get(
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const result = await orchestrator.getConceptLearning({
+        userId: req.user!.id,
         sessionId: req.params.sessionId,
         conceptId: req.params.conceptId,
       });
@@ -66,6 +80,7 @@ router.post(
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const result = await orchestrator.generateExplanation({
+        userId: req.user!.id,
         sessionId: req.params.sessionId,
         conceptId: req.params.conceptId,
       });
@@ -83,6 +98,7 @@ router.post(
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const result = await orchestrator.getOrCreateQuiz({
+        userId: req.user!.id,
         sessionId: req.params.sessionId,
         conceptId: req.params.conceptId,
       });
@@ -124,6 +140,7 @@ router.get(
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const result = await orchestrator.getGraph({
+        userId: req.user!.id,
         sessionId: req.params.sessionId,
       });
 

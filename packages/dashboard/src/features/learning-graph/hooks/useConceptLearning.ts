@@ -36,24 +36,11 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
   const submitQuizMutation = useMutation({
     mutationFn: (input: SubmitConceptQuizRequestSchema) =>
       learningGraphService.submitQuiz(sessionId!, conceptId!, input),
-    onSuccess: (result) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['learning-graph', 'concept', sessionId, conceptId] });
       void queryClient.invalidateQueries({ queryKey: ['learning-graph', 'graph', sessionId] });
-      queryClient.setQueryData(['learning-graph', 'session', sessionId], (previous: any) => {
-        if (!previous) {
-          return previous;
-        }
-
-        return {
-          ...previous,
-          pathSnapshot: result.pathSnapshot,
-          currentConcept: result.nextConcept,
-          progress: {
-            completedCount: result.pathSnapshot.filter((item) => item.pathState === 'completed').length,
-            totalCount: result.pathSnapshot.length,
-          },
-        };
-      });
+      void queryClient.invalidateQueries({ queryKey: ['learning-graph', 'library'] });
+      void queryClient.invalidateQueries({ queryKey: ['learning-graph', 'session', sessionId] });
       showToast('Đã cập nhật tiến độ học tập', 'success');
     },
     onError: (error: Error) => {

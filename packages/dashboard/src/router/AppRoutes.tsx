@@ -43,9 +43,12 @@ import DeploymentOverviewPage from '../features/deployments/pages/DeploymentOver
 import DeploymentEnvVarsPage from '../features/deployments/pages/DeploymentEnvVarsPage';
 import DeploymentDomainsPage from '../features/deployments/pages/DeploymentDomainsPage';
 import LearningGraphLayout from '../features/learning-graph/components/LearningGraphLayout';
-import LearningSessionsPage from '../features/learning-graph/pages/LearningSessionsPage';
 import ConceptLearningPage from '../features/learning-graph/pages/ConceptLearningPage';
 import KnowledgeGraphPage from '../features/learning-graph/pages/KnowledgeGraphPage';
+import LearningGraphWorkspacePage from '../features/learning-graph/pages/LearningGraphWorkspacePage';
+import LearningSessionOverviewPage from '../features/learning-graph/pages/LearningSessionOverviewPage';
+import LearningSessionLearnRedirectPage from '../features/learning-graph/pages/LearningSessionLearnRedirectPage';
+import LearningSessionShell from '../features/learning-graph/components/LearningSessionShell';
 
 export function AppRoutes() {
   return (
@@ -117,9 +120,14 @@ export function AppRoutes() {
                 <Route path="domains" element={<DeploymentDomainsPage />} />
               </Route>
               <Route path="/dashboard/learning-graph" element={<LearningGraphLayout />}>
-                <Route index element={<LearningSessionsPage />} />
-                <Route path="concepts/:conceptId" element={<ConceptLearningPage />} />
-                <Route path="graph" element={<KnowledgeGraphPage />} />
+                <Route index element={<LearningGraphWorkspacePage />} />
+                <Route path="sessions/:sessionId" element={<LearningSessionShell />}>
+                  <Route index element={<Navigate to="overview" replace />} />
+                  <Route path="overview" element={<LearningSessionOverviewPage />} />
+                  <Route path="learn" element={<LearningSessionLearnRedirectPage />} />
+                  <Route path="graph" element={<KnowledgeGraphPage />} />
+                  <Route path="concepts/:conceptId" element={<ConceptLearningPage />} />
+                </Route>
               </Route>
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

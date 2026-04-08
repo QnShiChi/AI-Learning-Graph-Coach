@@ -91,6 +91,17 @@ describe('LearningOrchestratorService', () => {
   });
 
   it('loads concept detail, explanation, quiz, and graph payloads for the dashboard', async () => {
+    vi.spyOn(SessionService.prototype, 'findSessionByIdForUser').mockResolvedValue({
+      id: '55555555-5555-5555-5555-555555555555',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      goal_title: 'Deep Learning',
+      source_topic: 'Deep Learning',
+      source_text: null,
+      status: 'ready',
+      current_concept_id: '66666666-6666-6666-6666-666666666666',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
     vi.spyOn(SessionService.prototype, 'getConceptLearningPayload').mockResolvedValue({
       concept: {
         id: '66666666-6666-6666-6666-666666666666',
@@ -139,14 +150,17 @@ describe('LearningOrchestratorService', () => {
 
     const service = new LearningOrchestratorService();
     const explanation = await service.generateExplanation({
+      userId: '11111111-1111-1111-1111-111111111111',
       sessionId: '55555555-5555-5555-5555-555555555555',
       conceptId: '66666666-6666-6666-6666-666666666666',
     });
     const quiz = await service.getOrCreateQuiz({
+      userId: '11111111-1111-1111-1111-111111111111',
       sessionId: '55555555-5555-5555-5555-555555555555',
       conceptId: '66666666-6666-6666-6666-666666666666',
     });
     const graph = await service.getGraph({
+      userId: '11111111-1111-1111-1111-111111111111',
       sessionId: '55555555-5555-5555-5555-555555555555',
     });
 
@@ -184,6 +198,65 @@ describe('LearningOrchestratorService', () => {
     ).rejects.toMatchObject<AppError>({
       code: ERROR_CODES.LEARNING_GRAPH_INVALID,
       statusCode: 422,
+    });
+  });
+
+  it('returns a most-recent-first session library with a spotlight session', async () => {
+    vi.spyOn(SessionService.prototype, 'listSessionLibraryItemsForUser').mockResolvedValue([
+      {
+        session: {
+          id: 'older-session',
+          userId: '11111111-1111-1111-1111-111111111111',
+          goalTitle: 'Linear Algebra',
+          sourceTopic: 'Linear Algebra',
+          sourceText: null,
+          status: 'ready',
+          currentConceptId: 'concept-a',
+          createdAt: '2026-04-08T09:00:00.000Z',
+          updatedAt: '2026-04-08T09:30:00.000Z',
+        },
+        progress: { completedCount: 1, totalCount: 4 },
+        currentConcept: null,
+      },
+      {
+        session: {
+          id: 'newer-session',
+          userId: '11111111-1111-1111-1111-111111111111',
+          goalTitle: 'Deep Learning',
+          sourceTopic: 'Deep Learning',
+          sourceText: null,
+          status: 'completed',
+          currentConceptId: null,
+          createdAt: '2026-04-08T10:00:00.000Z',
+          updatedAt: '2026-04-08T12:00:00.000Z',
+        },
+        progress: { completedCount: 5, totalCount: 5 },
+        currentConcept: null,
+      },
+    ]);
+
+    const service = new LearningOrchestratorService();
+    const result = await service.getSessionLibrary({
+      userId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(result.sessions.map((item) => item.session.id)).toEqual(['newer-session', 'older-session']);
+    expect(result.spotlightSession?.session.id).toBe('newer-session');
+  });
+
+  it('rejects session overview reads for sessions outside the current user scope', async () => {
+    vi.spyOn(SessionService.prototype, 'findSessionByIdForUser').mockResolvedValue(null);
+
+    const service = new LearningOrchestratorService();
+
+    await expect(
+      service.getSessionOverview({
+        userId: '11111111-1111-1111-1111-111111111111',
+        sessionId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      })
+    ).rejects.toMatchObject<AppError>({
+      code: ERROR_CODES.LEARNING_SESSION_NOT_FOUND,
+      statusCode: 404,
     });
   });
 });

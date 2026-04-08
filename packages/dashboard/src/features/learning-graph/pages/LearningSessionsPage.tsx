@@ -2,6 +2,7 @@ import { Button } from '@insforge/ui';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LearningPathPanel } from '../components';
+import { useLearningSessionLibrary } from '../hooks/useLearningSessionLibrary';
 import { useLearningSessions } from '../hooks/useLearningSessions';
 
 const sessionStatusLabels = {
@@ -17,8 +18,8 @@ export default function LearningSessionsPage() {
   const [topic, setTopic] = useState('');
   const [sourceText, setSourceText] = useState('');
   const sessionId = searchParams.get('sessionId') ?? undefined;
-  const { createSession, currentConcept, pathSnapshot, progress, isCreatingSession, session, isLoading } =
-    useLearningSessions(sessionId);
+  const { createSession, isCreatingSession } = useLearningSessionLibrary();
+  const { currentConcept, pathSnapshot, progress, session, isLoading } = useLearningSessions(sessionId);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-8">

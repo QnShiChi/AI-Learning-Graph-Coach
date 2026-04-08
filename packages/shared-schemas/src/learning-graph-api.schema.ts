@@ -49,6 +49,20 @@ export const getLearningSessionResponseSchema = z.object({
   currentConcept: sessionConceptSchema.nullable(),
 });
 
+export const learningSessionLibraryItemSchema = z.object({
+  session: learningSessionSchema,
+  progress: z.object({
+    completedCount: z.number().int().min(0),
+    totalCount: z.number().int().min(0),
+  }),
+  currentConcept: sessionConceptSchema.nullable(),
+});
+
+export const getLearningSessionLibraryResponseSchema = z.object({
+  sessions: z.array(learningSessionLibraryItemSchema),
+  spotlightSession: learningSessionLibraryItemSchema.nullable(),
+});
+
 export const getConceptLearningResponseSchema = z.object({
   concept: sessionConceptSchema,
   mastery: sessionConceptMasterySchema.nullable(),
@@ -78,6 +92,10 @@ export type SubmitConceptQuizRequestSchema = z.infer<typeof submitConceptQuizReq
 export type GetConceptQuizResponseSchema = z.infer<typeof getConceptQuizResponseSchema>;
 export type CreateLearningSessionResponseSchema = z.infer<typeof createLearningSessionResponseSchema>;
 export type GetLearningSessionResponseSchema = z.infer<typeof getLearningSessionResponseSchema>;
+export type LearningSessionLibraryItemSchema = z.infer<typeof learningSessionLibraryItemSchema>;
+export type GetLearningSessionLibraryResponseSchema = z.infer<
+  typeof getLearningSessionLibraryResponseSchema
+>;
 export type GetConceptLearningResponseSchema = z.infer<typeof getConceptLearningResponseSchema>;
 export type GenerateConceptExplanationResponseSchema = z.infer<
   typeof generateConceptExplanationResponseSchema
