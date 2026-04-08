@@ -172,6 +172,28 @@ docker compose -f docker-compose.prod.yml --env-file .env.project1 -p project1 l
 docker compose -f docker-compose.prod.yml --env-file .env.project1 -p project1 down     # stop
 ```
 
+## Local Dev Quick Start
+
+```bash
+make env
+make up
+make db-info
+```
+
+- `make env` creates `.env.local` from `.env.example` if needed
+- `make up` starts the full Docker stack
+- `make db-info` prints the PostgreSQL settings for local tools like DBeaver
+
+### DBeaver PostgreSQL Settings
+
+Use these local defaults unless you changed them in `.env.local`:
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `insforge`
+- Username: `postgres`
+- Password: `postgres`
+
 ### One-click Deployment
 
 In addition to running InsForge locally, you can also launch InsForge using a pre-configured setup. This allows you to get up and running quickly with InsForge without installing Docker on your local machine.
