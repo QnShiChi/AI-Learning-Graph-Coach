@@ -12,6 +12,7 @@ import {
   Rocket,
   GitFork,
   SquarePen,
+  BrainCircuit,
 } from 'lucide-react';
 
 export interface DashboardSecondaryMenuItem {
@@ -110,6 +111,12 @@ export const dashboardStaticMenuItems: DashboardPrimaryMenuItem[] = [
     label: 'Visualizer',
     href: '/dashboard/visualizer',
     icon: GitFork,
+  },
+  {
+    id: 'learning-graph',
+    label: 'Lo trinh AI',
+    href: '/dashboard/learning-graph',
+    icon: BrainCircuit,
   },
 ];
 

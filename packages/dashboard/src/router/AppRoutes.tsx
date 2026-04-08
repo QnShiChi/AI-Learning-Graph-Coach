@@ -42,6 +42,10 @@ import DeploymentLogsPage from '../features/deployments/pages/DeploymentLogsPage
 import DeploymentOverviewPage from '../features/deployments/pages/DeploymentOverviewPage';
 import DeploymentEnvVarsPage from '../features/deployments/pages/DeploymentEnvVarsPage';
 import DeploymentDomainsPage from '../features/deployments/pages/DeploymentDomainsPage';
+import LearningGraphLayout from '../features/learning-graph/components/LearningGraphLayout';
+import LearningSessionsPage from '../features/learning-graph/pages/LearningSessionsPage';
+import ConceptLearningPage from '../features/learning-graph/pages/ConceptLearningPage';
+import KnowledgeGraphPage from '../features/learning-graph/pages/KnowledgeGraphPage';
 
 export function AppRoutes() {
   return (
@@ -111,6 +115,11 @@ export function AppRoutes() {
                 <Route path="logs" element={<DeploymentLogsPage />} />
                 <Route path="env-vars" element={<DeploymentEnvVarsPage />} />
                 <Route path="domains" element={<DeploymentDomainsPage />} />
+              </Route>
+              <Route path="/dashboard/learning-graph" element={<LearningGraphLayout />}>
+                <Route index element={<LearningSessionsPage />} />
+                <Route path="concepts/:conceptId" element={<ConceptLearningPage />} />
+                <Route path="graph" element={<KnowledgeGraphPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
