@@ -22,14 +22,14 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
   const explanationMutation = useMutation({
     mutationFn: () => learningGraphService.generateExplanation(sessionId!, conceptId!),
     onError: (error: Error) => {
-      showToast(error.message || 'Khong the tao giai thich luc nay', 'error');
+      showToast(error.message || 'Không thể tạo giải thích lúc này', 'error');
     },
   });
 
   const quizMutation = useMutation({
     mutationFn: () => learningGraphService.getOrCreateQuiz(sessionId!, conceptId!),
     onError: (error: Error) => {
-      showToast(error.message || 'Khong the tao bai kiem tra luc nay', 'error');
+      showToast(error.message || 'Không thể tạo bài kiểm tra lúc này', 'error');
     },
   });
 
@@ -54,10 +54,10 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
           },
         };
       });
-      showToast('Da cap nhat tien do hoc tap', 'success');
+      showToast('Đã cập nhật tiến độ học tập', 'success');
     },
     onError: (error: Error) => {
-      showToast(error.message || 'Khong the nop bai kiem tra', 'error');
+      showToast(error.message || 'Không thể nộp bài kiểm tra', 'error');
     },
   });
 

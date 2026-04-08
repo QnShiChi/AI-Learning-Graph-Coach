@@ -13,7 +13,7 @@ export class TutorService {
     const messages: ChatMessageSchema[] = [
       {
         role: 'user',
-        content: `Giai thich bang tieng Viet ve khái niệm "${input.conceptName}" cho nguoi hoc. Mo ta ngan: "${input.conceptDescription}". Muc mastery hien tai: ${input.masteryScore}. Cac prerequisite con thieu: ${input.missingPrerequisites.join(', ') || 'khong co'}.`,
+        content: `Giải thích bằng tiếng Việt về khái niệm "${input.conceptName}" cho người học. Mô tả ngắn: "${input.conceptDescription}". Mức mastery hiện tại: ${input.masteryScore}. Các prerequisite còn thiếu: ${input.missingPrerequisites.join(', ') || 'không có'}.`,
       },
     ];
 

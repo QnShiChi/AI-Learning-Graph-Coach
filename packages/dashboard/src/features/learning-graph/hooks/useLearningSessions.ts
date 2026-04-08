@@ -29,10 +29,10 @@ export function useLearningSessions(sessionId?: string) {
         },
         currentConcept: result.currentConcept,
       });
-      showToast('Da tao phien hoc thanh cong', 'success');
+      showToast('Đã tạo phiên học thành công', 'success');
     },
     onError: (error: Error) => {
-      showToast(error.message || 'Khong the tao phien hoc', 'error');
+      showToast(error.message || 'Không thể tạo phiên học', 'error');
     },
   });
 

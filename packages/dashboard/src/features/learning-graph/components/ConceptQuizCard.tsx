@@ -33,26 +33,26 @@ export function ConceptQuizCard({
     <section className="rounded-lg border border-[var(--alpha-8)] bg-card p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium text-foreground">Bai kiem tra ngan</h2>
+          <h2 className="text-lg font-medium text-foreground">Bài kiểm tra ngắn</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Moi concept co mot bai quiz ngan de cap nhat mastery.
+            Mỗi khái niệm có một bài quiz ngắn để cập nhật mastery.
           </p>
         </div>
         <Button type="button" variant="outline" onClick={() => void onGenerate()}>
-          {isGenerating ? 'Dang tao...' : 'Tao bai quiz'}
+          {isGenerating ? 'Đang tạo...' : 'Tạo bài quiz'}
         </Button>
       </div>
 
       {questions.length === 0 || !quizId ? (
         <p className="mt-4 text-sm text-muted-foreground">
-          Chua co bai quiz. Bam nut ben tren de tao bai kiem tra cho concept nay.
+          Chưa có bài quiz. Bấm nút bên trên để tạo bài kiểm tra cho khái niệm này.
         </p>
       ) : (
         <div className="mt-4 space-y-4">
           {questions.map((question, index) => (
             <div key={question.id} className="rounded-md border border-[var(--alpha-8)] p-4">
               <p className="text-sm font-medium text-foreground">
-                Cau {index + 1}: {question.prompt}
+                Câu {index + 1}: {question.prompt}
               </p>
               <div className="mt-3 space-y-2">
                 {question.options.map((option) => (
@@ -88,7 +88,7 @@ export function ConceptQuizCard({
             }
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Dang nop bai...' : 'Nop bai'}
+            {isSubmitting ? 'Đang nộp bài...' : 'Nộp bài'}
           </Button>
         </div>
       )}

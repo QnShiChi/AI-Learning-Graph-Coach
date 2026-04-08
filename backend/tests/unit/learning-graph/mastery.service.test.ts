@@ -37,6 +37,6 @@ describe('QuizService', () => {
     });
 
     expect(result.score).toBe(1);
-    expect(result.feedback).toContain('tieng Viet');
+    expect(result.feedback).toContain('tiếng Việt');
   });
 });

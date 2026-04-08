@@ -25,10 +25,10 @@ export class QuizService {
       questions: [
         {
           id: 'q1',
-          prompt: `${input.conceptName} co vai tro gi?`,
+          prompt: `${input.conceptName} có vai trò gì?`,
           options: [
-            { id: 'a', text: 'La mot khai niem can hoc truoc' },
-            { id: 'b', text: 'La ten cua mot bang du lieu' },
+            { id: 'a', text: 'Là một khái niệm cần học trước' },
+            { id: 'b', text: 'Là tên của một bảng dữ liệu' },
           ],
         },
       ],
@@ -58,8 +58,8 @@ export class QuizService {
       score,
       feedback:
         score >= 0.8
-          ? 'Ban dang lam rat tot. Noi dung phan hoi nay duoc hien thi bang tieng Viet.'
-          : 'Ban nen xem lai phan giai thich va thu mot bai kiem tra moi bang tieng Viet.',
+          ? 'Bạn đang làm rất tốt. Nội dung phản hồi này được hiển thị bằng tiếng Việt.'
+          : 'Bạn nên xem lại phần giải thích và thử một bài kiểm tra mới bằng tiếng Việt.',
     };
   }
 }

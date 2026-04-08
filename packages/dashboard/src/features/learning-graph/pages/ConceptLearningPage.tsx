@@ -44,10 +44,10 @@ export default function ConceptLearningPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-medium text-foreground">
-            {concept?.displayName ?? 'Dang tai concept...'}
+            {concept?.displayName ?? 'Đang tải khái niệm...'}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Hoc theo vong lap: doc giai thich, lam quiz, cap nhat mastery, roi sang concept tiep theo.
+            Học theo vòng lặp: đọc giải thích, làm quiz, cập nhật mastery, rồi sang khái niệm tiếp theo.
           </p>
         </div>
         <div className="flex gap-3">
@@ -57,7 +57,7 @@ export default function ConceptLearningPage() {
               variant="outline"
               onClick={() => navigate(`/dashboard/learning-graph?sessionId=${session.id}`)}
             >
-              Ve tong quan
+              Về tổng quan
             </Button>
           ) : null}
           {session ? (
@@ -66,7 +66,7 @@ export default function ConceptLearningPage() {
               variant="outline"
               onClick={() => navigate(`/dashboard/learning-graph/graph?sessionId=${session.id}`)}
             >
-              Xem do thi
+              Xem đồ thị
             </Button>
           ) : null}
         </div>
@@ -84,23 +84,23 @@ export default function ConceptLearningPage() {
           <section className="rounded-lg border border-[var(--alpha-8)] bg-card p-5">
             <h2 className="text-lg font-medium text-foreground">Trang thai hoc tap</h2>
             {isLoadingConcept ? (
-              <p className="mt-3 text-sm text-muted-foreground">Dang tai du lieu concept...</p>
+              <p className="mt-3 text-sm text-muted-foreground">Đang tải dữ liệu khái niệm...</p>
             ) : (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <div className="rounded-md bg-[var(--alpha-4)] p-4">
-                  <p className="text-xs text-muted-foreground">Mastery</p>
+                  <p className="text-xs text-muted-foreground">Mức độ thành thạo</p>
                   <p className="mt-1 text-lg font-medium text-foreground">
                     {Math.round((mastery?.masteryScore ?? 0) * 100)}%
                   </p>
                 </div>
                 <div className="rounded-md bg-[var(--alpha-4)] p-4">
-                  <p className="text-xs text-muted-foreground">Lan quiz</p>
+                  <p className="text-xs text-muted-foreground">Số lần quiz</p>
                   <p className="mt-1 text-lg font-medium text-foreground">
                     {mastery?.attemptCount ?? 0}
                   </p>
                 </div>
                 <div className="rounded-md bg-[var(--alpha-4)] p-4">
-                  <p className="text-xs text-muted-foreground">So canh graph</p>
+                  <p className="text-xs text-muted-foreground">Số cạnh đồ thị</p>
                   <p className="mt-1 text-lg font-medium text-foreground">{graph.edges.length}</p>
                 </div>
               </div>
@@ -108,7 +108,7 @@ export default function ConceptLearningPage() {
           </section>
 
           <ConceptExplanationCard
-            title="Giai thich concept"
+            title="Giải thích khái niệm"
             explanation={explanation || concept?.description || ''}
             prerequisites={prerequisites.map((item) => item.displayName)}
             onGenerate={generateExplanation}

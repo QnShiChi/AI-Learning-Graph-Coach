@@ -15,20 +15,20 @@ export function ConceptExplanationCard(props: ConceptExplanationCardProps) {
         <div>
           <h2 className="text-lg font-medium text-foreground">{props.title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Giai thich duoc sinh bang tieng Viet theo concept hien tai.
+            Giải thích được sinh bằng tiếng Việt theo khái niệm hiện tại.
           </p>
         </div>
         <Button type="button" variant="outline" onClick={() => void props.onGenerate()}>
-          {props.isLoading ? 'Dang tao...' : 'Tao giai thich'}
+          {props.isLoading ? 'Đang tạo...' : 'Tạo giải thích'}
         </Button>
       </div>
       {props.prerequisites.length > 0 ? (
         <div className="mt-4 rounded-md bg-[var(--alpha-4)] p-3 text-sm text-muted-foreground">
-          Can nam truoc: {props.prerequisites.join(', ')}
+          Cần nắm trước: {props.prerequisites.join(', ')}
         </div>
       ) : null}
       <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground">
-        {props.explanation || 'Chua co giai thich. Bam nut de tao noi dung hoc cho concept nay.'}
+        {props.explanation || 'Chưa có giải thích. Bấm nút để tạo nội dung học cho khái niệm này.'}
       </p>
     </section>
   );

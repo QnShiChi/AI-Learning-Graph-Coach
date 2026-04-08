@@ -8,14 +8,14 @@ export function KnowledgeGraphPanel({ concepts, edges }: KnowledgeGraphPanelProp
 
   return (
     <section className="rounded-lg border border-[var(--alpha-8)] bg-card p-5">
-      <h2 className="text-lg font-medium text-foreground">Do thi kien thuc</h2>
+      <h2 className="text-lg font-medium text-foreground">Đồ thị kiến thức</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Man hinh nay dung de giai thich prerequisite va quan he giua cac concept.
+        Màn hình này dùng để giải thích prerequisite và quan hệ giữa các khái niệm.
       </p>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-md border border-[var(--alpha-8)] p-4">
-          <h3 className="text-sm font-medium text-foreground">Concepts</h3>
+          <h3 className="text-sm font-medium text-foreground">Các khái niệm</h3>
           <div className="mt-3 space-y-2">
             {concepts.map((concept) => (
               <div
@@ -24,7 +24,7 @@ export function KnowledgeGraphPanel({ concepts, edges }: KnowledgeGraphPanelProp
               >
                 <span className="text-sm text-foreground">{concept.displayName}</span>
                 <span className="text-xs text-muted-foreground">
-                  Do kho {Math.round(concept.difficulty * 100)}%
+                  Độ khó {Math.round(concept.difficulty * 100)}%
                 </span>
               </div>
             ))}
@@ -32,7 +32,7 @@ export function KnowledgeGraphPanel({ concepts, edges }: KnowledgeGraphPanelProp
         </div>
 
         <div className="rounded-md border border-[var(--alpha-8)] p-4">
-          <h3 className="text-sm font-medium text-foreground">Prerequisite</h3>
+          <h3 className="text-sm font-medium text-foreground">Quan hệ prerequisite</h3>
           <div className="mt-3 space-y-2">
             {edges.map((edge, index) => (
               <div
@@ -44,7 +44,7 @@ export function KnowledgeGraphPanel({ concepts, edges }: KnowledgeGraphPanelProp
               </div>
             ))}
             {edges.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Chua co canh prerequisite nao.</p>
+              <p className="text-sm text-muted-foreground">Chưa có cạnh prerequisite nào.</p>
             ) : null}
           </div>
         </div>
