@@ -22,3 +22,5 @@ export * from './deployments.schema.js';
 export * from './deployments-api.schema.js';
 export * from './schedules.schema.js';
 export * from './schedules-api.schema.js';
+export * from './learning-graph.schema.js';
+export * from './learning-graph-api.schema.js';
