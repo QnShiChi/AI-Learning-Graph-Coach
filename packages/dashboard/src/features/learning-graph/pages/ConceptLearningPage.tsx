@@ -1,15 +1,14 @@
 import { Button } from '@insforge/ui';
 import { useMemo } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ConceptExplanationCard, ConceptQuizCard, LearningPathPanel } from '../components';
 import { useConceptLearning } from '../hooks/useConceptLearning';
 import { useLearningSessions } from '../hooks/useLearningSessions';
 
 export default function ConceptLearningPage() {
   const navigate = useNavigate();
-  const params = useParams();
-  const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get('sessionId') ?? undefined;
+  const params = useParams<{ sessionId: string; conceptId: string }>();
+  const sessionId = params.sessionId;
   const conceptId = params.conceptId;
 
   const { pathSnapshot, session } = useLearningSessions(sessionId);
@@ -40,12 +39,12 @@ export default function ConceptLearningPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-8 py-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-medium text-foreground">
+          <h2 className="text-2xl font-medium text-foreground">
             {concept?.displayName ?? 'Đang tải khái niệm...'}
-          </h1>
+          </h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Học theo vòng lặp: đọc giải thích, làm quiz, cập nhật mastery, rồi sang khái niệm tiếp theo.
           </p>
@@ -55,7 +54,7 @@ export default function ConceptLearningPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate(`/dashboard/learning-graph?sessionId=${session.id}`)}
+              onClick={() => navigate(`/dashboard/learning-graph/sessions/${session.id}/overview`)}
             >
               Về tổng quan
             </Button>
@@ -64,7 +63,7 @@ export default function ConceptLearningPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate(`/dashboard/learning-graph/graph?sessionId=${session.id}`)}
+              onClick={() => navigate(`/dashboard/learning-graph/sessions/${session.id}/graph`)}
             >
               Xem đồ thị
             </Button>
@@ -76,13 +75,13 @@ export default function ConceptLearningPage() {
         <LearningPathPanel
           items={pathItems}
           onSelect={(nextConceptId) =>
-            navigate(`/dashboard/learning-graph/concepts/${nextConceptId}?sessionId=${sessionId ?? ''}`)
+            navigate(`/dashboard/learning-graph/sessions/${sessionId ?? ''}/concepts/${nextConceptId}`)
           }
         />
 
         <div className="space-y-6">
           <section className="rounded-lg border border-[var(--alpha-8)] bg-card p-5">
-            <h2 className="text-lg font-medium text-foreground">Trang thai hoc tap</h2>
+            <h2 className="text-lg font-medium text-foreground">Trạng thái học tập</h2>
             {isLoadingConcept ? (
               <p className="mt-3 text-sm text-muted-foreground">Đang tải dữ liệu khái niệm...</p>
             ) : (
