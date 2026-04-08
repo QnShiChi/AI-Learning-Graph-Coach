@@ -11,6 +11,31 @@ export interface QuizQuestion {
 }
 
 export class QuizService {
+  async getOrCreateActiveQuiz(input: {
+    sessionId: string;
+    conceptId: string;
+    conceptName: string;
+    conceptDescription: string;
+  }) {
+    return {
+      id: crypto.randomUUID(),
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
+      status: 'active' as const,
+      questions: [
+        {
+          id: 'q1',
+          prompt: `${input.conceptName} co vai tro gi?`,
+          options: [
+            { id: 'a', text: 'La mot khai niem can hoc truoc' },
+            { id: 'b', text: 'La ten cua mot bang du lieu' },
+          ],
+        },
+      ],
+      createdAt: new Date().toISOString(),
+    };
+  }
+
   grade(input: {
     questions: QuizQuestion[];
     answers: Array<{ questionId: string; selectedOptionId: string }>;

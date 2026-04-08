@@ -5,6 +5,7 @@ import { MasteryService } from './mastery.service.js';
 import { PathEngineService } from './path-engine.service.js';
 import { QuizService } from './quiz.service.js';
 import { SessionService } from './session.service.js';
+import { TutorService } from './tutor.service.js';
 
 export class LearningOrchestratorService {
   private inputNormalization = new InputNormalizationService();
@@ -14,6 +15,7 @@ export class LearningOrchestratorService {
   private masteryService = new MasteryService();
   private sessionService = new SessionService();
   private quizService = new QuizService();
+  private tutorService = new TutorService();
 
   async createSession(input: { userId: string; topic: string; sourceText?: string }) {
     const normalized = this.inputNormalization.normalize(input.topic, input.sourceText);
@@ -94,5 +96,44 @@ export class LearningOrchestratorService {
       ],
       nextConcept: null,
     };
+  }
+
+  async getSessionOverview(input: { sessionId: string }) {
+    return this.sessionService.getSessionOverview(input.sessionId);
+  }
+
+  async getConceptLearning(input: { sessionId: string; conceptId: string }) {
+    return this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
+  }
+
+  async generateExplanation(input: { sessionId: string; conceptId: string }) {
+    const payload = await this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
+    const explanation = await this.tutorService.generateExplanation({
+      conceptName: payload.concept?.displayName ?? 'Khái niệm hiện tại',
+      conceptDescription: payload.concept?.description ?? '',
+      masteryScore: payload.mastery?.masteryScore ?? 0,
+      missingPrerequisites: payload.prerequisites.map((item) => item.displayName),
+    });
+
+    return {
+      conceptId: input.conceptId,
+      explanation,
+    };
+  }
+
+  async getOrCreateQuiz(input: { sessionId: string; conceptId: string }) {
+    const payload = await this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
+    const quiz = await this.quizService.getOrCreateActiveQuiz({
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
+      conceptName: payload.concept?.displayName ?? 'Khái niệm hiện tại',
+      conceptDescription: payload.concept?.description ?? '',
+    });
+
+    return { quiz };
+  }
+
+  async getGraph(input: { sessionId: string }) {
+    return this.sessionService.getGraph(input.sessionId);
   }
 }
