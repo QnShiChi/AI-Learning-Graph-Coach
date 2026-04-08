@@ -3,6 +3,7 @@ dist/
 data/
 coverage/
 .env
+.env.local
 .worktrees/
 .DS_Store
 *.log
@@ -20,6 +21,7 @@ CLAUDE.md
 .agents/skills/*
 !.agents/skills/insforge-dev/
 !.agents/skills/insforge-dev/**
+.codex/skills/superpowers
 deno.lock
 better-auth/
 .mcp.json
