@@ -1,5 +1,8 @@
 import { DatabaseManager } from '@/infra/database/database.manager.js';
+import { lessonPackageSchema, type LessonPackageSchema } from '@insforge/shared-schemas';
 import crypto from 'node:crypto';
+import type { Pool, PoolClient } from 'pg';
+import type { PersistedQuizArtifact } from './quiz.service.js';
 
 export interface LearningSessionRecord {
   id: string;
@@ -56,8 +59,50 @@ interface SessionLibraryItemDto {
   currentConcept: SessionConceptDto | null;
 }
 
+interface SessionPathItemDto {
+  id: string;
+  sessionId: string;
+  conceptId: string;
+  pathVersion: number;
+  position: number;
+  pathState: 'completed' | 'current' | 'next' | 'upcoming' | 'locked';
+  isCurrent: boolean;
+  supersededAt: string | null;
+  createdAt: string;
+}
+
+interface SessionConceptMasteryDto {
+  sessionId: string;
+  conceptId: string;
+  masteryScore: number;
+  lastQuizScore: number;
+  attemptCount: number;
+  updatedAt: string;
+}
+
+interface SessionQuizAttemptDto {
+  score: number;
+}
+
+interface SessionConceptQuizRecord {
+  id: string;
+  sessionId: string;
+  conceptId: string;
+  status: 'active' | 'submitted' | 'expired';
+  quizPayload: PersistedQuizArtifact | null;
+  createdAt: string;
+  submittedAt: string | null;
+  expiredAt: string | null;
+}
+
+type Queryable = Pool | PoolClient;
+
 export class SessionService {
   private db = DatabaseManager.getInstance();
+
+  private getExecutor(client?: Queryable): Queryable {
+    return client ?? this.db.getPool();
+  }
 
   private mapSession(record: LearningSessionRecord | null): SessionDto | null {
     if (!record) {
@@ -202,6 +247,292 @@ export class SessionService {
     }
   }
 
+  async withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await this.db.getPool().connect();
+
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getNextPathVersion(sessionId: string, client?: Queryable): Promise<number> {
+    const result = await this.getExecutor(client).query<{ nextPathVersion: number }>(
+      `SELECT COALESCE(MAX(path_version), 0)::int + 1 AS "nextPathVersion"
+       FROM public.session_path_items
+       WHERE session_id = $1`,
+      [sessionId]
+    );
+
+    return result.rows[0]?.nextPathVersion ?? 1;
+  }
+
+  async lockSession(sessionId: string, client: PoolClient) {
+    await client.query(`SELECT id FROM public.learning_sessions WHERE id = $1 FOR UPDATE`, [sessionId]);
+  }
+
+  async getActiveQuiz(
+    sessionId: string,
+    conceptId: string,
+    client?: Queryable
+  ): Promise<SessionConceptQuizRecord | null> {
+    const result = await this.getExecutor(client).query<SessionConceptQuizRecord>(
+      `SELECT
+          id,
+          session_id AS "sessionId",
+          concept_id AS "conceptId",
+          status,
+          quiz_payload AS "quizPayload",
+          created_at AS "createdAt",
+          submitted_at AS "submittedAt",
+          expired_at AS "expiredAt"
+       FROM public.session_concept_quizzes
+       WHERE session_id = $1 AND concept_id = $2 AND status = 'active'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [sessionId, conceptId]
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async findQuizById(
+    sessionId: string,
+    conceptId: string,
+    quizId: string,
+    client?: Queryable
+  ): Promise<SessionConceptQuizRecord | null> {
+    const result = await this.getExecutor(client).query<SessionConceptQuizRecord>(
+      `SELECT
+          id,
+          session_id AS "sessionId",
+          concept_id AS "conceptId",
+          status,
+          quiz_payload AS "quizPayload",
+          created_at AS "createdAt",
+          submitted_at AS "submittedAt",
+          expired_at AS "expiredAt"
+       FROM public.session_concept_quizzes
+       WHERE session_id = $1 AND concept_id = $2 AND id = $3
+       LIMIT 1`,
+      [sessionId, conceptId, quizId]
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async insertActiveQuiz(
+    input: {
+      quiz: PersistedQuizArtifact;
+    },
+    client?: Queryable
+  ) {
+    const result = await this.getExecutor(client).query(
+      `INSERT INTO public.session_concept_quizzes
+        (id, session_id, concept_id, quiz_payload, status)
+       VALUES ($1, $2, $3, $4::jsonb, 'active')
+       ON CONFLICT DO NOTHING`,
+      [
+        input.quiz.id,
+        input.quiz.sessionId,
+        input.quiz.conceptId,
+        JSON.stringify(input.quiz),
+      ]
+    );
+
+    return result.rowCount > 0;
+  }
+
+  async expireActiveQuiz(
+    input: {
+      sessionId: string;
+      conceptId: string;
+    },
+    client?: Queryable
+  ) {
+    await this.getExecutor(client).query(
+      `UPDATE public.session_concept_quizzes
+       SET status = 'expired',
+           expired_at = NOW()
+       WHERE session_id = $1 AND concept_id = $2 AND status = 'active'`,
+      [input.sessionId, input.conceptId]
+    );
+  }
+
+  async markQuizSubmitted(
+    input: {
+      quizId: string;
+    },
+    client?: Queryable
+  ) {
+    const result = await this.getExecutor(client).query(
+      `UPDATE public.session_concept_quizzes
+       SET status = 'submitted',
+           submitted_at = NOW()
+       WHERE id = $1 AND status = 'active'`,
+      [input.quizId]
+    );
+
+    return result.rowCount > 0;
+  }
+
+  async insertQuizAttempt(
+    input: {
+      quizId: string;
+      sessionId: string;
+      conceptId: string;
+      userAnswers: Array<{ questionId: string; selectedOptionId: string }>;
+      score: number;
+      resultSummary: {
+        correctCount: number;
+        totalQuestions: number;
+        feedback: string;
+      };
+    },
+    client?: Queryable
+  ) {
+    await this.getExecutor(client).query(
+      `INSERT INTO public.quiz_attempts
+        (id, quiz_id, session_id, concept_id, user_answers, score, result_summary)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb)`,
+      [
+        crypto.randomUUID(),
+        input.quizId,
+        input.sessionId,
+        input.conceptId,
+        JSON.stringify(input.userAnswers),
+        input.score,
+        JSON.stringify(input.resultSummary),
+      ]
+    );
+  }
+
+  async listQuizAttemptScores(
+    sessionId: string,
+    conceptId: string,
+    client?: Queryable
+  ): Promise<number[]> {
+    const result = await this.getExecutor(client).query<SessionQuizAttemptDto>(
+      `SELECT score
+       FROM public.quiz_attempts
+       WHERE session_id = $1 AND concept_id = $2
+       ORDER BY created_at ASC`,
+      [sessionId, conceptId]
+    );
+
+    return result.rows.map((row) => row.score);
+  }
+
+  async upsertConceptMastery(
+    input: {
+      sessionId: string;
+      conceptId: string;
+      masteryScore: number;
+      lastQuizScore: number;
+      attemptCount: number;
+    },
+    client?: Queryable
+  ): Promise<SessionConceptMasteryDto> {
+    const result = await this.getExecutor(client).query<SessionConceptMasteryDto>(
+      `INSERT INTO public.session_concept_mastery
+        (session_id, concept_id, mastery_score, last_quiz_score, attempt_count, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (session_id, concept_id) DO UPDATE
+       SET mastery_score = EXCLUDED.mastery_score,
+           last_quiz_score = EXCLUDED.last_quiz_score,
+           attempt_count = EXCLUDED.attempt_count,
+           updated_at = NOW()
+       RETURNING
+         session_id AS "sessionId",
+         concept_id AS "conceptId",
+         mastery_score AS "masteryScore",
+         last_quiz_score AS "lastQuizScore",
+         attempt_count AS "attemptCount",
+         updated_at AS "updatedAt"`,
+      [
+        input.sessionId,
+        input.conceptId,
+        input.masteryScore,
+        input.lastQuizScore,
+        input.attemptCount,
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  async replaceCurrentPathSnapshot(
+    input: {
+      sessionId: string;
+      pathVersion: number;
+      currentConceptId: string | null;
+      items: Array<{
+        conceptId: string;
+        position: number;
+        pathState: 'completed' | 'current' | 'next' | 'upcoming' | 'locked';
+      }>;
+    },
+    client?: Queryable
+  ): Promise<SessionPathItemDto[]> {
+    const executor = this.getExecutor(client);
+
+    await executor.query(
+      `UPDATE public.session_path_items
+       SET is_current = FALSE,
+           superseded_at = NOW()
+       WHERE session_id = $1 AND is_current = TRUE`,
+      [input.sessionId]
+    );
+
+    const persistedItems: SessionPathItemDto[] = [];
+
+    for (const item of input.items) {
+      const result = await executor.query<SessionPathItemDto>(
+        `INSERT INTO public.session_path_items
+          (id, session_id, concept_id, path_version, position, path_state, is_current)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+         RETURNING
+           id,
+           session_id AS "sessionId",
+           concept_id AS "conceptId",
+           path_version AS "pathVersion",
+           position,
+           path_state AS "pathState",
+           is_current AS "isCurrent",
+           superseded_at AS "supersededAt",
+           created_at AS "createdAt"`,
+        [
+          crypto.randomUUID(),
+          input.sessionId,
+          item.conceptId,
+          input.pathVersion,
+          item.position,
+          item.pathState,
+        ]
+      );
+
+      persistedItems.push(result.rows[0]);
+    }
+
+    await executor.query(
+      `UPDATE public.learning_sessions
+       SET current_concept_id = $2,
+           status = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [input.sessionId, input.currentConceptId, input.currentConceptId ? 'ready' : 'completed']
+    );
+
+    return persistedItems;
+  }
+
   async markSessionReady(input: { sessionId: string; currentConceptId: string | null }) {
     await this.db.getPool().query(
       `UPDATE public.learning_sessions
@@ -306,6 +637,23 @@ export class SessionService {
     return result.rows[0] ?? null;
   }
 
+  async listConceptMasteries(sessionId: string, client?: Queryable): Promise<SessionConceptMasteryDto[]> {
+    const result = await this.getExecutor(client).query<SessionConceptMasteryDto>(
+      `SELECT
+          session_id AS "sessionId",
+          concept_id AS "conceptId",
+          mastery_score AS "masteryScore",
+          last_quiz_score AS "lastQuizScore",
+          attempt_count AS "attemptCount",
+          updated_at AS "updatedAt"
+       FROM public.session_concept_mastery
+       WHERE session_id = $1`,
+      [sessionId]
+    );
+
+    return result.rows;
+  }
+
   async listPrerequisites(sessionId: string, conceptId: string): Promise<SessionConceptRecord[]> {
     const result = await this.db.getPool().query<SessionConceptRecord>(
       `SELECT c.*
@@ -317,6 +665,118 @@ export class SessionService {
     );
 
     return result.rows;
+  }
+
+  async getCurrentLessonPackage(sessionId: string, conceptId: string): Promise<LessonPackageSchema | null> {
+    const result = await this.db.getPool().query<{ lessonPayload: unknown }>(
+      `SELECT lesson_payload AS "lessonPayload"
+       FROM public.session_concept_lessons
+       WHERE session_id = $1 AND concept_id = $2 AND is_current = TRUE
+       ORDER BY lesson_version DESC
+       LIMIT 1`,
+      [sessionId, conceptId]
+    );
+
+    const lessonPayload = result.rows[0]?.lessonPayload;
+
+    if (!lessonPayload) {
+      return null;
+    }
+
+    const parsedLessonPackage = lessonPackageSchema.safeParse(lessonPayload);
+    return parsedLessonPackage.success ? parsedLessonPackage.data : null;
+  }
+
+  async insertLessonPackage(input: {
+    sessionId: string;
+    conceptId: string;
+    lessonPackage: LessonPackageSchema;
+  }) {
+    const result = await this.db.getPool().query(
+      `INSERT INTO public.session_concept_lessons
+        (id, session_id, concept_id, lesson_version, lesson_payload, regeneration_reason, is_current)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, TRUE)
+       ON CONFLICT ON CONSTRAINT session_concept_lessons_version_unique DO NOTHING`,
+      [
+        crypto.randomUUID(),
+        input.sessionId,
+        input.conceptId,
+        input.lessonPackage.version,
+        JSON.stringify(input.lessonPackage),
+        input.lessonPackage.regenerationReason,
+      ]
+    );
+
+    return result.rowCount > 0;
+  }
+
+  async getLatestVoiceSummary(
+    sessionId: string,
+    conceptId: string,
+    lessonVersion: number
+  ): Promise<{ summary: string; summaryVersion: number } | null> {
+    const result = await this.db
+      .getPool()
+      .query<{ summaryPayload: { summary?: string } | null; summaryVersion: number }>(
+        `SELECT
+            summary_payload AS "summaryPayload",
+            summary_version AS "summaryVersion"
+         FROM public.session_concept_voice_summaries
+         WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
+         ORDER BY summary_version DESC
+         LIMIT 1`,
+        [sessionId, conceptId, lessonVersion]
+      );
+
+    const record = result.rows[0];
+
+    if (!record?.summaryPayload?.summary) {
+      return null;
+    }
+
+    return {
+      summary: record.summaryPayload.summary,
+      summaryVersion: record.summaryVersion,
+    };
+  }
+
+  async insertVoiceSummary(input: {
+    sessionId: string;
+    conceptId: string;
+    lessonVersion: number;
+    summary: string;
+  }): Promise<number> {
+    return this.withTransaction(async (client) => {
+      await this.lockSession(input.sessionId, client);
+
+      const result = await client.query<{ summaryVersion: number }>(
+        `WITH next_version AS (
+           SELECT COALESCE(MAX(summary_version), 0)::int + 1 AS summary_version
+           FROM public.session_concept_voice_summaries
+           WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
+         )
+         INSERT INTO public.session_concept_voice_summaries
+           (id, session_id, concept_id, lesson_version, summary_version, summary_payload)
+         SELECT
+           $4,
+           $1,
+           $2,
+           $3,
+           next_version.summary_version,
+           $5::jsonb
+         FROM next_version
+         RETURNING summary_version AS "summaryVersion"`,
+        [
+          input.sessionId,
+          input.conceptId,
+          input.lessonVersion,
+          crypto.randomUUID(),
+          JSON.stringify({ summary: input.summary }),
+        ]
+      );
+
+      return result.rows[0]?.summaryVersion ?? 1;
+    });
   }
 
   async getGraph(sessionId: string) {
@@ -390,13 +850,15 @@ export class SessionService {
   }
 
   async getConceptLearningPayload(sessionId: string, conceptId: string) {
-    const [concept, mastery, prerequisites] = await Promise.all([
+    const [session, concept, mastery, prerequisites] = await Promise.all([
+      this.findSessionById(sessionId),
       this.findConceptById(sessionId, conceptId),
       this.getConceptMastery(sessionId, conceptId),
       this.listPrerequisites(sessionId, conceptId),
     ]);
 
     return {
+      session: this.mapSession(session),
       concept: this.mapConcept(concept),
       mastery,
       prerequisites: prerequisites

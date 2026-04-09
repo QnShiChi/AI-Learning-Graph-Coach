@@ -1,18 +1,20 @@
 export class MasteryService {
   calculateNext(input: {
-    previousMastery: number;
+    previousAttemptScores: number[];
     quizScore: number;
-    attemptCount: number;
   }) {
+    const nextAttemptCount = input.previousAttemptScores.length + 1;
+    const totalScore =
+      input.previousAttemptScores.reduce((sum, score) => sum + score, 0) + input.quizScore;
     const masteryScore = Math.min(
       1,
-      Number((input.previousMastery * 0.4 + input.quizScore * 0.6).toFixed(2))
+      Number((totalScore / Math.max(nextAttemptCount, 1)).toFixed(2))
     );
 
     return {
       masteryScore,
       lastQuizScore: input.quizScore,
-      attemptCount: input.attemptCount + 1,
+      attemptCount: nextAttemptCount,
     };
   }
 }
