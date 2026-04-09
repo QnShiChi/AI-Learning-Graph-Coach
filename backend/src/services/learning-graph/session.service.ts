@@ -746,33 +746,37 @@ export class SessionService {
     lessonVersion: number;
     summary: string;
   }): Promise<number> {
-    const result = await this.db.getPool().query<{ summaryVersion: number }>(
-      `WITH next_version AS (
-         SELECT COALESCE(MAX(summary_version), 0)::int + 1 AS summary_version
-         FROM public.session_concept_voice_summaries
-         WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
-       )
-       INSERT INTO public.session_concept_voice_summaries
-         (id, session_id, concept_id, lesson_version, summary_version, summary_payload)
-       SELECT
-         $4,
-         $1,
-         $2,
-         $3,
-         next_version.summary_version,
-         $5::jsonb
-       FROM next_version
-       RETURNING summary_version AS "summaryVersion"`,
-      [
-        input.sessionId,
-        input.conceptId,
-        input.lessonVersion,
-        crypto.randomUUID(),
-        JSON.stringify({ summary: input.summary }),
-      ]
-    );
+    return this.withTransaction(async (client) => {
+      await this.lockSession(input.sessionId, client);
 
-    return result.rows[0]?.summaryVersion ?? 1;
+      const result = await client.query<{ summaryVersion: number }>(
+        `WITH next_version AS (
+           SELECT COALESCE(MAX(summary_version), 0)::int + 1 AS summary_version
+           FROM public.session_concept_voice_summaries
+           WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
+         )
+         INSERT INTO public.session_concept_voice_summaries
+           (id, session_id, concept_id, lesson_version, summary_version, summary_payload)
+         SELECT
+           $4,
+           $1,
+           $2,
+           $3,
+           next_version.summary_version,
+           $5::jsonb
+         FROM next_version
+         RETURNING summary_version AS "summaryVersion"`,
+        [
+          input.sessionId,
+          input.conceptId,
+          input.lessonVersion,
+          crypto.randomUUID(),
+          JSON.stringify({ summary: input.summary }),
+        ]
+      );
+
+      return result.rows[0]?.summaryVersion ?? 1;
+    });
   }
 
   async getGraph(sessionId: string) {

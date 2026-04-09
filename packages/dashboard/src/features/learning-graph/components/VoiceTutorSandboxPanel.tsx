@@ -144,7 +144,15 @@ export function VoiceTutorSandboxPanel({
     }
 
     setErrorMessage(null);
-    recognitionRef.current.start();
+
+    try {
+      recognitionRef.current.start();
+    } catch {
+      setIsListening(false);
+      setErrorMessage(
+        'Không thể bật micro lúc này. Hãy kiểm tra quyền truy cập hoặc thử lại sau vài giây.'
+      );
+    }
   };
 
   const handleStopListening = () => {

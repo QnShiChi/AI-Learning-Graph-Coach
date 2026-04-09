@@ -58,34 +58,44 @@ export class VoiceTutorService {
 
   async reply(input: VoiceTutorReplyInput) {
     const { baseUrl, model } = this.requireConfig();
-    const response = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        stream: false,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Bạn là một người bạn học giỏi cùng lớp. Hãy trả lời bằng tiếng Việt đơn giản, chỉ bám vào khái niệm hiện tại, prerequisites liên quan và nội dung bài học đang hiển thị. Nếu người học hỏi ngoài phạm vi này, hãy kéo họ về khái niệm hiện tại.',
-          },
-          {
-            role: 'user',
-            content: [
-              `Khái niệm hiện tại: ${input.conceptName}`,
-              `Bài học hiện tại: ${input.lessonPackage.feynmanExplanation}`,
-              `Diễn giải kỹ thuật: ${input.lessonPackage.technicalTranslation}`,
-              `Prerequisites liên quan: ${input.prerequisiteNames.join(', ') || 'không có'}`,
-              `Tóm tắt hội thoại trước: ${input.priorSummary ?? 'chưa có'}`,
-              `Người học hỏi: ${input.learnerUtterance}`,
-            ].join('\n'),
-          },
-        ],
-      }),
-    });
+    let response: Response;
+
+    try {
+      response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Bạn là một người bạn học giỏi cùng lớp. Hãy trả lời bằng tiếng Việt đơn giản, chỉ bám vào khái niệm hiện tại, prerequisites liên quan và nội dung bài học đang hiển thị. Nếu người học hỏi ngoài phạm vi này, hãy kéo họ về khái niệm hiện tại.',
+            },
+            {
+              role: 'user',
+              content: [
+                `Khái niệm hiện tại: ${input.conceptName}`,
+                `Bài học hiện tại: ${input.lessonPackage.feynmanExplanation}`,
+                `Diễn giải kỹ thuật: ${input.lessonPackage.technicalTranslation}`,
+                `Prerequisites liên quan: ${input.prerequisiteNames.join(', ') || 'không có'}`,
+                `Tóm tắt hội thoại trước: ${input.priorSummary ?? 'chưa có'}`,
+                `Người học hỏi: ${input.learnerUtterance}`,
+              ].join('\n'),
+            },
+          ],
+        }),
+      });
+    } catch {
+      throw new AppError(
+        'Không thể kết nối tới Ollama cho voice sandbox.',
+        502,
+        ERROR_CODES.AI_UPSTREAM_UNAVAILABLE
+      );
+    }
 
     if (!response.ok) {
       throw new AppError(
@@ -95,7 +105,18 @@ export class VoiceTutorService {
       );
     }
 
-    const json = (await response.json()) as OllamaChatResponse;
+    let json: OllamaChatResponse;
+
+    try {
+      json = (await response.json()) as OllamaChatResponse;
+    } catch {
+      throw new AppError(
+        'Ollama trả về dữ liệu không hợp lệ cho voice sandbox.',
+        502,
+        ERROR_CODES.AI_UPSTREAM_UNAVAILABLE
+      );
+    }
+
     const replyText = json.message?.content?.trim() || DEFAULT_REPLY_TEXT;
 
     return {
