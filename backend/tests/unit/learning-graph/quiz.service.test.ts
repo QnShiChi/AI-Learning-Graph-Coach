@@ -46,6 +46,7 @@ describe('QuizService', () => {
     expect(artifact.questions.length).toBeGreaterThan(0);
     expect(artifact.lessonVersion).toBe(1);
     expect(artifact.questions.every((question) => question.options.length >= 2)).toBe(true);
+    expect(artifact.questions.every((question) => question.options[0]?.isCorrect !== true)).toBe(true);
     expect(
       artifact.questions.every(
         (question) => question.options.filter((option) => option.isCorrect).length === 1

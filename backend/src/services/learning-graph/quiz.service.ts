@@ -54,12 +54,29 @@ export class QuizService {
         text,
         isCorrect: false,
       }));
+    const orderedOptions = this.rotateOptions(input.id, [correctOption, ...distractorOptions]);
 
     return persistedQuizQuestionSchema.parse({
       id: input.id,
       prompt: input.prompt,
-      options: [correctOption, ...distractorOptions],
+      options: orderedOptions,
     });
+  }
+
+  private rotateOptions(
+    questionId: string,
+    options: PersistedQuizQuestionOption[]
+  ): PersistedQuizQuestionOption[] {
+    if (options.length <= 1) {
+      return options;
+    }
+
+    const rawOffset =
+      [...questionId].reduce((sum, character) => sum + character.charCodeAt(0), 0) %
+      options.length;
+    const offset = rawOffset === 0 ? 1 : rawOffset;
+
+    return options.map((_, index) => options[(index + offset) % options.length]);
   }
 
   buildQuizFromLesson(input: {
