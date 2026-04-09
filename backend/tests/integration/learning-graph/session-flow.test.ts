@@ -102,6 +102,17 @@ describe('LearningOrchestratorService', () => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
+    vi.spyOn(SessionService.prototype, 'findSessionById').mockResolvedValue({
+      id: '55555555-5555-5555-5555-555555555555',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      goal_title: 'Deep Learning',
+      source_topic: 'Deep Learning',
+      source_text: 'Backpropagation lan truyền lỗi từ output về hidden layers.',
+      status: 'ready',
+      current_concept_id: '66666666-6666-6666-6666-666666666666',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
     vi.spyOn(SessionService.prototype, 'findConceptById').mockResolvedValue({
       id: '66666666-6666-6666-6666-666666666666',
       session_id: '55555555-5555-5555-5555-555555555555',
@@ -121,6 +132,8 @@ describe('LearningOrchestratorService', () => {
       updatedAt: new Date().toISOString(),
     });
     vi.spyOn(SessionService.prototype, 'listPrerequisites').mockResolvedValue([]);
+    vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'insertLessonPackage').mockResolvedValue(undefined);
     vi.spyOn(TutorService.prototype, 'generateExplanation').mockResolvedValue(
       'Giai thich bang tieng Viet'
     );
@@ -187,6 +200,7 @@ describe('LearningOrchestratorService', () => {
       technicalTranslation: expect.any(String),
     });
     expect(conceptLearning.quiz).toBeNull();
+    expect(conceptLearning.recap).toBeNull();
     expect(explanation.explanation.length).toBeGreaterThan(0);
     expect(quiz.quiz.status).toBe('active');
     expect(Array.isArray(graph.concepts)).toBe(true);

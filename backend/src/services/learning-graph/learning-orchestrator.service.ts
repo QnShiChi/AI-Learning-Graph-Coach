@@ -1,6 +1,7 @@
 import { GraphGenerationService } from './graph-generation.service.js';
 import { GraphValidationService, type DraftConcept } from './graph-validation.service.js';
 import { InputNormalizationService } from './input-normalization.service.js';
+import { LessonPackageService } from './lesson-package.service.js';
 import { MasteryService } from './mastery.service.js';
 import { PathEngineService } from './path-engine.service.js';
 import { QuizService } from './quiz.service.js';
@@ -14,6 +15,7 @@ export class LearningOrchestratorService {
   private inputNormalization = new InputNormalizationService();
   private graphGeneration = new GraphGenerationService();
   private graphValidation = new GraphValidationService();
+  private lessonPackageService = new LessonPackageService();
   private pathEngine = new PathEngineService();
   private masteryService = new MasteryService();
   private sessionService = new SessionService();
@@ -218,7 +220,33 @@ export class LearningOrchestratorService {
 
   async getConceptLearning(input: { userId: string; sessionId: string; conceptId: string }) {
     await this.assertSessionAccess(input.userId, input.sessionId);
-    return this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
+    const payload = await this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
+    const { session, ...conceptPayload } = payload;
+
+    if (!conceptPayload.concept) {
+      throw new AppError('Không tìm thấy khái niệm trong phiên học.', 404, ERROR_CODES.NOT_FOUND);
+    }
+
+    const lessonPackage = await this.lessonPackageService.getOrCreateCurrentLessonPackage({
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
+      conceptName: conceptPayload.concept.displayName,
+      conceptDescription: conceptPayload.concept.description,
+      sourceText: session?.sourceText ?? null,
+      masteryScore: conceptPayload.mastery?.masteryScore ?? 0,
+      prerequisites: conceptPayload.prerequisites.map((item) => ({
+        id: item.id,
+        displayName: item.displayName,
+        description: item.description,
+      })),
+    });
+
+    return {
+      ...conceptPayload,
+      lessonPackage,
+      quiz: null,
+      recap: null,
+    };
   }
 
   async generateExplanation(input: { userId: string; sessionId: string; conceptId: string }) {

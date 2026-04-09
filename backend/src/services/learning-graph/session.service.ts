@@ -1,4 +1,5 @@
 import { DatabaseManager } from '@/infra/database/database.manager.js';
+import { lessonPackageSchema, type LessonPackageSchema } from '@insforge/shared-schemas';
 import crypto from 'node:crypto';
 
 export interface LearningSessionRecord {
@@ -319,6 +320,49 @@ export class SessionService {
     return result.rows;
   }
 
+  async getCurrentLessonPackage(sessionId: string, conceptId: string): Promise<LessonPackageSchema | null> {
+    const result = await this.db.getPool().query<{ lessonPayload: unknown }>(
+      `SELECT lesson_payload AS "lessonPayload"
+       FROM public.session_concept_lessons
+       WHERE session_id = $1 AND concept_id = $2 AND is_current = TRUE
+       ORDER BY lesson_version DESC
+       LIMIT 1`,
+      [sessionId, conceptId]
+    );
+
+    const lessonPayload = result.rows[0]?.lessonPayload;
+
+    if (!lessonPayload) {
+      return null;
+    }
+
+    const parsedLessonPackage = lessonPackageSchema.safeParse(lessonPayload);
+    return parsedLessonPackage.success ? parsedLessonPackage.data : null;
+  }
+
+  async insertLessonPackage(input: {
+    sessionId: string;
+    conceptId: string;
+    lessonPackage: LessonPackageSchema;
+  }) {
+    const result = await this.db.getPool().query(
+      `INSERT INTO public.session_concept_lessons
+        (id, session_id, concept_id, lesson_version, lesson_payload, regeneration_reason, is_current)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, TRUE)
+       ON CONFLICT ON CONSTRAINT session_concept_lessons_version_unique DO NOTHING`,
+      [
+        crypto.randomUUID(),
+        input.sessionId,
+        input.conceptId,
+        input.lessonPackage.version,
+        JSON.stringify(input.lessonPackage),
+        input.lessonPackage.regenerationReason,
+      ]
+    );
+
+    return result.rowCount > 0;
+  }
+
   async getGraph(sessionId: string) {
     const [concepts, edges] = await Promise.all([
       this.db.getPool().query(
@@ -390,13 +434,15 @@ export class SessionService {
   }
 
   async getConceptLearningPayload(sessionId: string, conceptId: string) {
-    const [concept, mastery, prerequisites] = await Promise.all([
+    const [session, concept, mastery, prerequisites] = await Promise.all([
+      this.findSessionById(sessionId),
       this.findConceptById(sessionId, conceptId),
       this.getConceptMastery(sessionId, conceptId),
       this.listPrerequisites(sessionId, conceptId),
     ]);
 
     return {
+      session: this.mapSession(session),
       concept: this.mapConcept(concept),
       mastery,
       prerequisites: prerequisites

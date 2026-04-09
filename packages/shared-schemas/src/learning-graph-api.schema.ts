@@ -47,6 +47,11 @@ export const voiceTutorReplySchema = z.object({
   summaryVersion: z.number().int().min(1),
 });
 
+export const conceptRecapSchema = z.object({
+  summary: z.string(),
+  whyPassed: z.string(),
+});
+
 export const createLearningSessionRequestSchema = z.object({
   topic: z.string().trim().min(1, 'Topic is required'),
   sourceText: z.string().trim().max(20000).optional(),
@@ -108,6 +113,7 @@ export const getConceptLearningResponseSchema = z.object({
   prerequisites: z.array(sessionConceptSchema),
   lessonPackage: lessonPackageSchema,
   quiz: conceptQuizSchema.nullable(),
+  recap: conceptRecapSchema.nullable(),
 });
 
 export const generateConceptExplanationResponseSchema = z.object({
@@ -146,3 +152,4 @@ export type GetLearningGraphResponseSchema = z.infer<typeof getLearningGraphResp
 export type LessonImageMappingItemSchema = z.infer<typeof lessonImageMappingItemSchema>;
 export type LessonPackageSchema = z.infer<typeof lessonPackageSchema>;
 export type VoiceTutorReplySchema = z.infer<typeof voiceTutorReplySchema>;
+export type ConceptRecapSchema = z.infer<typeof conceptRecapSchema>;
