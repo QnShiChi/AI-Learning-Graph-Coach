@@ -1,9 +1,11 @@
 import { apiClient } from '../../../lib/api/client';
 import type {
+  ConceptQuizSchema,
+  SessionConceptMasterySchema,
+  SessionConceptSchema,
   CreateLearningSessionRequestSchema,
   CreateLearningSessionResponseSchema,
   GenerateConceptExplanationResponseSchema,
-  GetConceptLearningResponseSchema,
   GetConceptQuizResponseSchema,
   GetLearningGraphResponseSchema,
   GetLearningSessionLibraryResponseSchema,
@@ -11,6 +13,43 @@ import type {
   SubmitConceptQuizRequestSchema,
   SubmitConceptQuizResponseSchema,
 } from '@insforge/shared-schemas';
+
+export interface LessonPackagePayload {
+  version: number;
+  regenerationReason: 'initial' | 'failed_quiz' | 'simpler_reexplain' | 'prerequisite_refresh';
+  feynmanExplanation: string;
+  metaphorImage: {
+    imageUrl: string;
+    prompt: string;
+  };
+  imageMapping: Array<{
+    visualElement: string;
+    everydayMeaning: string;
+    technicalMeaning: string;
+    teachingPurpose: string;
+  }>;
+  imageReadingText: string;
+  technicalTranslation: string;
+  prerequisiteMiniLessons: Array<{
+    prerequisiteConceptId: string;
+    title: string;
+    content: string;
+  }>;
+}
+
+export interface ConceptRecapPayload {
+  summary: string;
+  whyPassed: string;
+}
+
+export interface ConceptLearningPayload {
+  concept: SessionConceptSchema;
+  mastery: SessionConceptMasterySchema | null;
+  prerequisites: SessionConceptSchema[];
+  lessonPackage: LessonPackagePayload;
+  quiz: ConceptQuizSchema | null;
+  recap: ConceptRecapPayload | null;
+}
 
 export class LearningGraphService {
   async createSession(
@@ -38,7 +77,7 @@ export class LearningGraphService {
   async getConceptLearning(
     sessionId: string,
     conceptId: string
-  ): Promise<GetConceptLearningResponseSchema> {
+  ): Promise<ConceptLearningPayload> {
     return apiClient.request(`/learning-sessions/${sessionId}/concepts/${conceptId}`, {
       headers: apiClient.withAccessToken(),
     });
@@ -54,7 +93,7 @@ export class LearningGraphService {
     });
   }
 
-  async getOrCreateQuiz(sessionId: string, conceptId: string): Promise<GetConceptQuizResponseSchema> {
+  async revealQuiz(sessionId: string, conceptId: string): Promise<GetConceptQuizResponseSchema> {
     return apiClient.request(`/learning-sessions/${sessionId}/concepts/${conceptId}/quiz`, {
       method: 'POST',
       headers: apiClient.withAccessToken(),

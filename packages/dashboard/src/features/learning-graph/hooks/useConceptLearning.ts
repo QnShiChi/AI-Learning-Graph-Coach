@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SubmitConceptQuizRequestSchema } from '@insforge/shared-schemas';
+import { useEffect } from 'react';
 import { learningGraphService } from '../services/learning-graph.service';
 import { useToast } from '../../../lib/hooks/useToast';
 
@@ -26,8 +27,8 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
     },
   });
 
-  const quizMutation = useMutation({
-    mutationFn: () => learningGraphService.getOrCreateQuiz(sessionId!, conceptId!),
+  const revealQuizMutation = useMutation({
+    mutationFn: () => learningGraphService.revealQuiz(sessionId!, conceptId!),
     onError: (error: Error) => {
       showToast(error.message || 'Không thể tạo bài kiểm tra lúc này', 'error');
     },
@@ -37,6 +38,7 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
     mutationFn: (input: SubmitConceptQuizRequestSchema) =>
       learningGraphService.submitQuiz(sessionId!, conceptId!, input),
     onSuccess: () => {
+      revealQuizMutation.reset();
       void queryClient.invalidateQueries({ queryKey: ['learning-graph', 'concept', sessionId, conceptId] });
       void queryClient.invalidateQueries({ queryKey: ['learning-graph', 'graph', sessionId] });
       void queryClient.invalidateQueries({ queryKey: ['learning-graph', 'library'] });
@@ -48,22 +50,37 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
     },
   });
 
+  useEffect(() => {
+    revealQuizMutation.reset();
+  }, [conceptId, revealQuizMutation, sessionId]);
+
+  const conceptLearning = conceptQuery.data
+    ? {
+        ...conceptQuery.data,
+        quiz: conceptQuery.data.quiz ?? revealQuizMutation.data?.quiz ?? null,
+      }
+    : null;
+
   return {
-    concept: conceptQuery.data?.concept ?? null,
-    mastery: conceptQuery.data?.mastery ?? null,
-    prerequisites: conceptQuery.data?.prerequisites ?? [],
+    conceptLearning,
+    concept: conceptLearning?.concept ?? null,
+    mastery: conceptLearning?.mastery ?? null,
+    prerequisites: conceptLearning?.prerequisites ?? [],
     graph: graphQuery.data ?? { concepts: [], edges: [] },
     explanation: explanationMutation.data?.explanation ?? '',
-    activeQuiz: quizMutation.data?.quiz ?? null,
+    activeQuiz: conceptLearning?.quiz ?? null,
     isLoadingConcept: conceptQuery.isLoading,
+    isLoadingConceptLearning: conceptQuery.isLoading,
+    conceptErrorMessage: conceptQuery.error instanceof Error ? conceptQuery.error.message : null,
     isLoadingGraph: graphQuery.isLoading,
     isGeneratingExplanation: explanationMutation.isPending,
-    isGeneratingQuiz: quizMutation.isPending,
+    isGeneratingQuiz: revealQuizMutation.isPending,
+    isRevealingQuiz: revealQuizMutation.isPending,
     isSubmittingQuiz: submitQuizMutation.isPending,
     refetchConcept: conceptQuery.refetch,
     refetchGraph: graphQuery.refetch,
     generateExplanation: explanationMutation.mutateAsync,
-    getOrCreateQuiz: quizMutation.mutateAsync,
+    revealQuiz: revealQuizMutation.mutateAsync,
     submitQuiz: submitQuizMutation.mutateAsync,
   };
 }

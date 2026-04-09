@@ -1,4 +1,6 @@
 export * from './LearningPathPanel';
+export * from './ConceptLessonCard';
+export * from './ConceptMasteryCard';
 export * from './ConceptExplanationCard';
 export * from './ConceptQuizCard';
 export * from './KnowledgeGraphPanel';

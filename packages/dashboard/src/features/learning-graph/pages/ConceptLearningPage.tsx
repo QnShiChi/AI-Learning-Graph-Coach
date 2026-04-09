@@ -1,7 +1,13 @@
 import { Button } from '@insforge/ui';
 import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ConceptExplanationCard, ConceptQuizCard, LearningPathPanel } from '../components';
+import {
+  ConceptExplanationCard,
+  ConceptLessonCard,
+  ConceptMasteryCard,
+  ConceptQuizCard,
+  LearningPathPanel,
+} from '../components';
 import { useConceptLearning } from '../hooks/useConceptLearning';
 import { useLearningSessions } from '../hooks/useLearningSessions';
 
@@ -13,18 +19,17 @@ export default function ConceptLearningPage() {
 
   const { pathSnapshot, session } = useLearningSessions(sessionId);
   const {
+    conceptLearning,
     concept,
-    mastery,
-    prerequisites,
-    graph,
+    conceptErrorMessage,
     explanation,
-    activeQuiz,
-    isLoadingConcept,
+    isLoadingConceptLearning,
     isGeneratingExplanation,
-    isGeneratingQuiz,
+    isRevealingQuiz,
     isSubmittingQuiz,
     generateExplanation,
-    getOrCreateQuiz,
+    revealQuiz,
+    refetchConcept,
     submitQuiz,
   } = useConceptLearning(sessionId, conceptId);
 
@@ -46,7 +51,7 @@ export default function ConceptLearningPage() {
             {concept?.displayName ?? 'Đang tải khái niệm...'}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Học theo vòng lặp: đọc giải thích, làm quiz, cập nhật mastery, rồi sang khái niệm tiếp theo.
+            Học theo bài học chính trước, chỉ mở quiz khi bạn thực sự muốn tự kiểm tra.
           </p>
         </div>
         <div className="flex gap-3">
@@ -80,48 +85,66 @@ export default function ConceptLearningPage() {
         />
 
         <div className="space-y-6">
-          <section className="rounded-lg border border-[var(--alpha-8)] bg-card p-5">
-            <h2 className="text-lg font-medium text-foreground">Trạng thái học tập</h2>
-            {isLoadingConcept ? (
-              <p className="mt-3 text-sm text-muted-foreground">Đang tải dữ liệu khái niệm...</p>
-            ) : (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-md bg-[var(--alpha-4)] p-4">
-                  <p className="text-xs text-muted-foreground">Mức độ thành thạo</p>
-                  <p className="mt-1 text-lg font-medium text-foreground">
-                    {Math.round((mastery?.masteryScore ?? 0) * 100)}%
-                  </p>
-                </div>
-                <div className="rounded-md bg-[var(--alpha-4)] p-4">
-                  <p className="text-xs text-muted-foreground">Số lần quiz</p>
-                  <p className="mt-1 text-lg font-medium text-foreground">
-                    {mastery?.attemptCount ?? 0}
-                  </p>
-                </div>
-                <div className="rounded-md bg-[var(--alpha-4)] p-4">
-                  <p className="text-xs text-muted-foreground">Số cạnh đồ thị</p>
-                  <p className="mt-1 text-lg font-medium text-foreground">{graph.edges.length}</p>
-                </div>
+          {isLoadingConceptLearning ? (
+            <section className="rounded-lg border border-[var(--alpha-8)] bg-card p-5">
+              <p className="text-sm text-muted-foreground">Đang tải dữ liệu khái niệm...</p>
+            </section>
+          ) : !conceptLearning ? (
+            <section className="rounded-lg border border-[var(--alpha-8)] bg-card p-5">
+              <h2 className="text-lg font-medium text-foreground">Không tải được khái niệm</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {conceptErrorMessage ?? 'Đã có lỗi khi tải dữ liệu học tập cho khái niệm này.'}
+              </p>
+              <div className="mt-4">
+                <Button type="button" variant="outline" onClick={() => void refetchConcept()}>
+                  Thử tải lại
+                </Button>
               </div>
-            )}
-          </section>
+            </section>
+          ) : (
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+              <ConceptLessonCard
+                lesson={conceptLearning.lessonPackage}
+                onRevealQuiz={revealQuiz}
+                isRevealingQuiz={isRevealingQuiz}
+              />
 
-          <ConceptExplanationCard
-            title="Giải thích khái niệm"
-            explanation={explanation || concept?.description || ''}
-            prerequisites={prerequisites.map((item) => item.displayName)}
-            onGenerate={generateExplanation}
-            isLoading={isGeneratingExplanation}
-          />
+              <div className="space-y-6">
+                <ConceptMasteryCard
+                  masteryScore={conceptLearning.mastery?.masteryScore ?? 0}
+                  attemptCount={conceptLearning.mastery?.attemptCount ?? 0}
+                  recapSummary={conceptLearning.recap?.summary ?? null}
+                />
 
-          <ConceptQuizCard
-            quizId={activeQuiz?.id}
-            questions={activeQuiz?.questions ?? []}
-            onGenerate={getOrCreateQuiz}
-            onSubmit={submitQuiz}
-            isGenerating={isGeneratingQuiz}
-            isSubmitting={isSubmittingQuiz}
-          />
+                <ConceptExplanationCard
+                  explanation={explanation}
+                  prerequisites={conceptLearning.prerequisites.map((item) => item.displayName)}
+                  onGenerate={generateExplanation}
+                  isLoading={isGeneratingExplanation}
+                />
+
+                {conceptLearning.quiz ? (
+                  <ConceptQuizCard
+                    quiz={conceptLearning.quiz}
+                    onSubmit={submitQuiz}
+                    isSubmitting={isSubmittingQuiz}
+                    recapSummary={conceptLearning.recap?.summary ?? null}
+                  />
+                ) : (
+                  <section className="rounded-lg border border-dashed border-[var(--alpha-8)] bg-card p-5">
+                    <h2 className="text-lg font-medium text-foreground">Bài kiểm tra ngắn</h2>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Quiz vẫn đang được ẩn. Hãy học xong bài học chính rồi bấm
+                      {' '}
+                      &quot;Tôi đã hiểu, cho tôi quiz&quot;
+                      {' '}
+                      để mở bài kiểm tra.
+                    </p>
+                  </section>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
