@@ -90,7 +90,7 @@ describe('LearningOrchestratorService', () => {
     expect(result.mastery.attemptCount).toBeGreaterThan(0);
   });
 
-  it('loads concept detail, explanation, quiz, and graph payloads for the dashboard', async () => {
+  it('loads a concept payload with a default lesson package before quiz reveal', async () => {
     vi.spyOn(SessionService.prototype, 'findSessionByIdForUser').mockResolvedValue({
       id: '55555555-5555-5555-5555-555555555555',
       user_id: '11111111-1111-1111-1111-111111111111',
@@ -102,27 +102,25 @@ describe('LearningOrchestratorService', () => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
-    vi.spyOn(SessionService.prototype, 'getConceptLearningPayload').mockResolvedValue({
-      concept: {
-        id: '66666666-6666-6666-6666-666666666666',
-        sessionId: '55555555-5555-5555-5555-555555555555',
-        canonicalName: 'backpropagation',
-        displayName: 'Backpropagation',
-        description: 'desc',
-        difficulty: 0.3,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      mastery: {
-        sessionId: '55555555-5555-5555-5555-555555555555',
-        conceptId: '66666666-6666-6666-6666-666666666666',
-        masteryScore: 0.2,
-        lastQuizScore: 0.2,
-        attemptCount: 1,
-        updatedAt: new Date().toISOString(),
-      },
-      prerequisites: [],
+    vi.spyOn(SessionService.prototype, 'findConceptById').mockResolvedValue({
+      id: '66666666-6666-6666-6666-666666666666',
+      session_id: '55555555-5555-5555-5555-555555555555',
+      canonical_name: 'backpropagation',
+      display_name: 'Backpropagation',
+      description: 'desc',
+      difficulty: 0.3,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
+    vi.spyOn(SessionService.prototype, 'getConceptMastery').mockResolvedValue({
+      sessionId: '55555555-5555-5555-5555-555555555555',
+      conceptId: '66666666-6666-6666-6666-666666666666',
+      masteryScore: 0.2,
+      lastQuizScore: 0.2,
+      attemptCount: 1,
+      updatedAt: new Date().toISOString(),
+    });
+    vi.spyOn(SessionService.prototype, 'listPrerequisites').mockResolvedValue([]);
     vi.spyOn(TutorService.prototype, 'generateExplanation').mockResolvedValue(
       'Giai thich bang tieng Viet'
     );
@@ -149,6 +147,11 @@ describe('LearningOrchestratorService', () => {
     });
 
     const service = new LearningOrchestratorService();
+    const conceptLearning = await service.getConceptLearning({
+      userId: '11111111-1111-1111-1111-111111111111',
+      sessionId: '55555555-5555-5555-5555-555555555555',
+      conceptId: '66666666-6666-6666-6666-666666666666',
+    });
     const explanation = await service.generateExplanation({
       userId: '11111111-1111-1111-1111-111111111111',
       sessionId: '55555555-5555-5555-5555-555555555555',
@@ -164,6 +167,26 @@ describe('LearningOrchestratorService', () => {
       sessionId: '55555555-5555-5555-5555-555555555555',
     });
 
+    expect(conceptLearning.lessonPackage).toMatchObject({
+      version: 1,
+      regenerationReason: 'initial',
+      feynmanExplanation: expect.any(String),
+      metaphorImage: {
+        imageUrl: expect.any(String),
+        prompt: expect.any(String),
+      },
+      imageMapping: expect.arrayContaining([
+        expect.objectContaining({
+          visualElement: expect.any(String),
+          everydayMeaning: expect.any(String),
+          technicalMeaning: expect.any(String),
+          teachingPurpose: expect.any(String),
+        }),
+      ]),
+      imageReadingText: expect.any(String),
+      technicalTranslation: expect.any(String),
+    });
+    expect(conceptLearning.quiz).toBeNull();
     expect(explanation.explanation.length).toBeGreaterThan(0);
     expect(quiz.quiz.status).toBe('active');
     expect(Array.isArray(graph.concepts)).toBe(true);

@@ -8,6 +8,45 @@ import {
   sessionEdgeSchema,
 } from './learning-graph.schema.js';
 
+export const lessonImageMappingItemSchema = z.object({
+  visualElement: z.string(),
+  everydayMeaning: z.string(),
+  technicalMeaning: z.string(),
+  teachingPurpose: z.string(),
+});
+
+export const lessonPackageSchema = z.object({
+  version: z.number().int().min(1),
+  regenerationReason: z.enum([
+    'initial',
+    'failed_quiz',
+    'simpler_reexplain',
+    'prerequisite_refresh',
+  ]),
+  feynmanExplanation: z.string(),
+  metaphorImage: z.object({
+    imageUrl: z.string().url(),
+    prompt: z.string(),
+  }),
+  imageMapping: z.array(lessonImageMappingItemSchema),
+  imageReadingText: z.string(),
+  technicalTranslation: z.string(),
+  prerequisiteMiniLessons: z
+    .array(
+      z.object({
+        prerequisiteConceptId: z.string().uuid(),
+        title: z.string(),
+        content: z.string(),
+      })
+    )
+    .default([]),
+});
+
+export const voiceTutorReplySchema = z.object({
+  replyText: z.string(),
+  summaryVersion: z.number().int().min(1),
+});
+
 export const createLearningSessionRequestSchema = z.object({
   topic: z.string().trim().min(1, 'Topic is required'),
   sourceText: z.string().trim().max(20000).optional(),
@@ -67,6 +106,8 @@ export const getConceptLearningResponseSchema = z.object({
   concept: sessionConceptSchema,
   mastery: sessionConceptMasterySchema.nullable(),
   prerequisites: z.array(sessionConceptSchema),
+  lessonPackage: lessonPackageSchema,
+  quiz: conceptQuizSchema.nullable(),
 });
 
 export const generateConceptExplanationResponseSchema = z.object({
@@ -102,3 +143,6 @@ export type GenerateConceptExplanationResponseSchema = z.infer<
 >;
 export type SubmitConceptQuizResponseSchema = z.infer<typeof submitConceptQuizResponseSchema>;
 export type GetLearningGraphResponseSchema = z.infer<typeof getLearningGraphResponseSchema>;
+export type LessonImageMappingItemSchema = z.infer<typeof lessonImageMappingItemSchema>;
+export type LessonPackageSchema = z.infer<typeof lessonPackageSchema>;
+export type VoiceTutorReplySchema = z.infer<typeof voiceTutorReplySchema>;
