@@ -710,6 +710,71 @@ export class SessionService {
     return result.rowCount > 0;
   }
 
+  async getLatestVoiceSummary(
+    sessionId: string,
+    conceptId: string,
+    lessonVersion: number
+  ): Promise<{ summary: string; summaryVersion: number } | null> {
+    const result = await this.db
+      .getPool()
+      .query<{ summaryPayload: { summary?: string } | null; summaryVersion: number }>(
+        `SELECT
+            summary_payload AS "summaryPayload",
+            summary_version AS "summaryVersion"
+         FROM public.session_concept_voice_summaries
+         WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
+         ORDER BY summary_version DESC
+         LIMIT 1`,
+        [sessionId, conceptId, lessonVersion]
+      );
+
+    const record = result.rows[0];
+
+    if (!record?.summaryPayload?.summary) {
+      return null;
+    }
+
+    return {
+      summary: record.summaryPayload.summary,
+      summaryVersion: record.summaryVersion,
+    };
+  }
+
+  async insertVoiceSummary(input: {
+    sessionId: string;
+    conceptId: string;
+    lessonVersion: number;
+    summary: string;
+  }): Promise<number> {
+    const result = await this.db.getPool().query<{ summaryVersion: number }>(
+      `WITH next_version AS (
+         SELECT COALESCE(MAX(summary_version), 0)::int + 1 AS summary_version
+         FROM public.session_concept_voice_summaries
+         WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
+       )
+       INSERT INTO public.session_concept_voice_summaries
+         (id, session_id, concept_id, lesson_version, summary_version, summary_payload)
+       SELECT
+         $4,
+         $1,
+         $2,
+         $3,
+         next_version.summary_version,
+         $5::jsonb
+       FROM next_version
+       RETURNING summary_version AS "summaryVersion"`,
+      [
+        input.sessionId,
+        input.conceptId,
+        input.lessonVersion,
+        crypto.randomUUID(),
+        JSON.stringify({ summary: input.summary }),
+      ]
+    );
+
+    return result.rows[0]?.summaryVersion ?? 1;
+  }
+
   async getGraph(sessionId: string) {
     const [concepts, edges] = await Promise.all([
       this.db.getPool().query(

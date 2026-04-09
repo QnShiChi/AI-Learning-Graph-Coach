@@ -7,9 +7,11 @@ import {
   ConceptMasteryCard,
   ConceptQuizCard,
   LearningPathPanel,
+  VoiceTutorSandboxPanel,
 } from '../components';
 import { useConceptLearning } from '../hooks/useConceptLearning';
 import { useLearningSessions } from '../hooks/useLearningSessions';
+import { learningGraphService } from '../services/learning-graph.service';
 
 export default function ConceptLearningPage() {
   const navigate = useNavigate();
@@ -145,6 +147,25 @@ export default function ConceptLearningPage() {
               </div>
             </div>
           )}
+
+          {!isLoadingConceptLearning && conceptLearning && sessionId && conceptId ? (
+            <div className="rounded-lg border border-dashed border-[var(--alpha-8)] bg-card/60 p-5">
+              <div className="mb-4">
+                <h2 className="text-lg font-medium text-foreground">Voice Sandbox</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Khu thử nghiệm riêng cho voice tutor trên khái niệm hiện tại. Phần này tách khỏi
+                  flow lesson và quiz chính.
+                </p>
+              </div>
+
+              <VoiceTutorSandboxPanel
+                openingText={conceptLearning.lessonPackage.feynmanExplanation}
+                onAsk={(utterance) =>
+                  learningGraphService.askVoiceTutor(sessionId, conceptId, utterance)
+                }
+              />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

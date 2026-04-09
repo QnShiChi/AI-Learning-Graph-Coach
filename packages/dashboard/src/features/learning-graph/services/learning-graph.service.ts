@@ -51,6 +51,11 @@ export interface ConceptLearningPayload {
   recap: ConceptRecapPayload | null;
 }
 
+export interface VoiceTutorReplyPayload {
+  replyText: string;
+  summaryVersion: number;
+}
+
 export class LearningGraphService {
   async createSession(
     input: CreateLearningSessionRequestSchema
@@ -115,6 +120,18 @@ export class LearningGraphService {
   async getGraph(sessionId: string): Promise<GetLearningGraphResponseSchema> {
     return apiClient.request(`/learning-sessions/${sessionId}/graph`, {
       headers: apiClient.withAccessToken(),
+    });
+  }
+
+  async askVoiceTutor(
+    sessionId: string,
+    conceptId: string,
+    learnerUtterance: string
+  ): Promise<VoiceTutorReplyPayload> {
+    return apiClient.request(`/learning-sessions/${sessionId}/concepts/${conceptId}/voice-sandbox`, {
+      method: 'POST',
+      headers: apiClient.withAccessToken(),
+      body: JSON.stringify({ learnerUtterance }),
     });
   }
 }

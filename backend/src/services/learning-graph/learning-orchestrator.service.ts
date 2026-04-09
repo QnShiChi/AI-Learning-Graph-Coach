@@ -7,6 +7,7 @@ import { PathEngineService } from './path-engine.service.js';
 import { QuizService } from './quiz.service.js';
 import { SessionService } from './session.service.js';
 import { TutorService } from './tutor.service.js';
+import { VoiceTutorService } from './voice-tutor.service.js';
 import { AppError } from '@/api/middlewares/error.js';
 import { ERROR_CODES } from '@/types/error-constants.js';
 import logger from '@/utils/logger.js';
@@ -22,6 +23,7 @@ export class LearningOrchestratorService {
   private sessionService = new SessionService();
   private quizService = new QuizService();
   private tutorService = new TutorService();
+  private voiceTutorService = new VoiceTutorService();
 
   private buildPrerequisiteMap(
     edges: Array<{ fromConceptId: string; toConceptId: string; edgeType: string }>
@@ -464,5 +466,38 @@ export class LearningOrchestratorService {
   async getGraph(input: { userId: string; sessionId: string }) {
     await this.assertSessionAccess(input.userId, input.sessionId);
     return this.sessionService.getGraph(input.sessionId);
+  }
+
+  async askVoiceTutor(input: {
+    userId: string;
+    sessionId: string;
+    conceptId: string;
+    learnerUtterance: string;
+  }) {
+    await this.assertSessionAccess(input.userId, input.sessionId);
+    const payload = await this.getConceptLearning(input);
+    const previousSummaryRecord = await this.sessionService.getLatestVoiceSummary(
+      input.sessionId,
+      input.conceptId,
+      payload.lessonPackage.version
+    );
+    const reply = await this.voiceTutorService.reply({
+      conceptName: payload.concept.displayName,
+      lessonPackage: payload.lessonPackage,
+      prerequisiteNames: payload.prerequisites.map((item) => item.displayName),
+      priorSummary: previousSummaryRecord?.summary ?? null,
+      learnerUtterance: input.learnerUtterance,
+    });
+    const summaryVersion = await this.sessionService.insertVoiceSummary({
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
+      lessonVersion: payload.lessonPackage.version,
+      summary: reply.summary,
+    });
+
+    return {
+      replyText: reply.replyText,
+      summaryVersion,
+    };
   }
 }

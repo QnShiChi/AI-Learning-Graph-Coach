@@ -8,9 +8,13 @@ import {
 import { LearningOrchestratorService } from '@/services/learning-graph/learning-orchestrator.service.js';
 import { AppError } from '@/api/middlewares/error.js';
 import { ERROR_CODES } from '@/types/error-constants.js';
+import { z } from 'zod';
 
 const router = Router();
 const orchestrator = new LearningOrchestratorService();
+const voiceSandboxRequestSchema = z.object({
+  learnerUtterance: z.string().trim().min(1).max(2000),
+});
 
 router.get('/', verifyUser, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -126,6 +130,30 @@ router.post(
         conceptId: req.params.conceptId,
         quizId: parsed.data.quizId,
         answers: parsed.data.answers,
+      });
+
+      successResponse(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/:sessionId/concepts/:conceptId/voice-sandbox',
+  verifyUser,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const parsed = voiceSandboxRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(JSON.stringify(parsed.error.issues), 400, ERROR_CODES.INVALID_INPUT);
+      }
+
+      const result = await orchestrator.askVoiceTutor({
+        userId: req.user!.id,
+        sessionId: req.params.sessionId,
+        conceptId: req.params.conceptId,
+        learnerUtterance: parsed.data.learnerUtterance,
       });
 
       successResponse(res, result);

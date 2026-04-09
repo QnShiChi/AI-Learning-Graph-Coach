@@ -3,6 +3,7 @@ export * from './ConceptLessonCard';
 export * from './ConceptMasteryCard';
 export * from './ConceptExplanationCard';
 export * from './ConceptQuizCard';
+export * from './VoiceTutorSandboxPanel';
 export * from './KnowledgeGraphPanel';
 export * from './CreateLearningSessionDialog';
 export * from './LearningSessionCard';
