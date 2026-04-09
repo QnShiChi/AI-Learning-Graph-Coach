@@ -3,18 +3,17 @@ import { MasteryService } from '@/services/learning-graph/mastery.service.js';
 import { QuizService } from '@/services/learning-graph/quiz.service.js';
 
 describe('MasteryService', () => {
-  it('updates mastery from quiz score only', () => {
+  it('updates mastery from persisted attempt history plus the latest quiz score', () => {
     const service = new MasteryService();
 
     const next = service.calculateNext({
-      previousMastery: 0.25,
+      previousAttemptScores: [0.25, 0.75],
       quizScore: 0.8,
-      attemptCount: 1,
     });
 
-    expect(next.masteryScore).toBeGreaterThan(0.25);
+    expect(next.masteryScore).toBe(0.6);
     expect(next.lastQuizScore).toBe(0.8);
-    expect(next.attemptCount).toBe(2);
+    expect(next.attemptCount).toBe(3);
   });
 });
 

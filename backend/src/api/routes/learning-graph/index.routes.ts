@@ -121,6 +121,7 @@ router.post(
       }
 
       const result = await orchestrator.submitQuiz({
+        userId: req.user!.id,
         sessionId: req.params.sessionId,
         conceptId: req.params.conceptId,
         quizId: parsed.data.quizId,
