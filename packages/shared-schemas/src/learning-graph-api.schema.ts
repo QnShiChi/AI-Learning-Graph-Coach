@@ -25,7 +25,13 @@ export const lessonPackageSchema = z.object({
   ]),
   feynmanExplanation: z.string(),
   metaphorImage: z.object({
-    imageUrl: z.string().url(),
+    imageUrl: z
+      .string()
+      .min(1)
+      .refine(
+        (value) => value.startsWith('data:image/') || /^https?:\/\//.test(value),
+        'Expected an http(s) URL or data image URL'
+      ),
     prompt: z.string(),
   }),
   imageMapping: z.array(lessonImageMappingItemSchema),
@@ -42,9 +48,45 @@ export const lessonPackageSchema = z.object({
     .default([]),
 });
 
-export const voiceTutorReplySchema = z.object({
-  replyText: z.string(),
+export const voiceTutorAudioSchema = z.object({
+  mimeType: z.string().min(1),
+  base64Audio: z.string().min(1),
+});
+
+export const createVoiceTurnRequestSchema = z
+  .object({
+    lessonVersion: z.number().int().min(1),
+    transcriptFallback: z.string().trim().min(1).optional(),
+    audioInput: z
+      .object({
+        mimeType: z.string().min(1),
+        base64Audio: z.string().min(1),
+      })
+      .optional(),
+  })
+  .refine((value) => Boolean(value.transcriptFallback || value.audioInput), {
+    message: 'Either transcriptFallback or audioInput is required',
+    path: ['transcriptFallback'],
+  });
+
+export const voiceHistoryTurnSchema = z.object({
+  id: z.string().uuid(),
+  learnerTranscript: z.string(),
+  assistantTranscript: z.string(),
+  lessonVersion: z.number().int().min(1),
+  createdAt: z.string(),
+});
+
+export const createVoiceTurnResponseSchema = z.object({
+  learnerTranscript: z.string(),
+  assistantTranscript: z.string(),
+  assistantAudio: voiceTutorAudioSchema.nullable(),
   summaryVersion: z.number().int().min(1),
+  suggestQuiz: z.boolean(),
+});
+
+export const getVoiceHistoryResponseSchema = z.object({
+  turns: z.array(voiceHistoryTurnSchema),
 });
 
 export const conceptRecapSchema = z.object({
@@ -112,6 +154,7 @@ export const getConceptLearningResponseSchema = z.object({
   mastery: sessionConceptMasterySchema.nullable(),
   prerequisites: z.array(sessionConceptSchema),
   lessonPackage: lessonPackageSchema,
+  explanation: z.string().nullable(),
   quiz: conceptQuizSchema.nullable(),
   recap: conceptRecapSchema.nullable(),
 });
@@ -151,5 +194,9 @@ export type SubmitConceptQuizResponseSchema = z.infer<typeof submitConceptQuizRe
 export type GetLearningGraphResponseSchema = z.infer<typeof getLearningGraphResponseSchema>;
 export type LessonImageMappingItemSchema = z.infer<typeof lessonImageMappingItemSchema>;
 export type LessonPackageSchema = z.infer<typeof lessonPackageSchema>;
-export type VoiceTutorReplySchema = z.infer<typeof voiceTutorReplySchema>;
+export type VoiceTutorAudioSchema = z.infer<typeof voiceTutorAudioSchema>;
+export type CreateVoiceTurnRequestSchema = z.infer<typeof createVoiceTurnRequestSchema>;
+export type VoiceHistoryTurnSchema = z.infer<typeof voiceHistoryTurnSchema>;
+export type CreateVoiceTurnResponseSchema = z.infer<typeof createVoiceTurnResponseSchema>;
+export type GetVoiceHistoryResponseSchema = z.infer<typeof getVoiceHistoryResponseSchema>;
 export type ConceptRecapSchema = z.infer<typeof conceptRecapSchema>;

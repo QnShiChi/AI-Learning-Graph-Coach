@@ -57,9 +57,13 @@ services:
       target: dev
     image: insforge-dev
     working_dir: /app
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${APP_PORT:-7130}:7130"
       - "${AUTH_PORT:-7131}:7131"
@@ -108,6 +112,7 @@ services:
       - CLOUD_API_HOST=${CLOUD_API_HOST:-}
       # LLM Model API keys
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       # OAuth Configuration
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
@@ -128,6 +133,7 @@ services:
       # Storage directory (for local file storage when S3 is not configured)
       - STORAGE_DIR=/insforge-storage
     volumes:
+      - ./.env:/app/.env:ro
       - ./package.json:/app/package.json
       - ./package-lock.json:/app/package-lock.json
       - ./backend:/app/backend

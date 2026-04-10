@@ -4,6 +4,7 @@ import { LearningOrchestratorService } from '@/services/learning-graph/learning-
 import { SessionService } from '@/services/learning-graph/session.service.js';
 import { GraphGenerationService } from '@/services/learning-graph/graph-generation.service.js';
 import { TutorService } from '@/services/learning-graph/tutor.service.js';
+import { VoiceTutorService } from '@/services/learning-graph/voice-tutor.service.js';
 import { ERROR_CODES } from '@/types/error-constants.js';
 import type { PoolClient } from 'pg';
 
@@ -308,6 +309,10 @@ describe('LearningOrchestratorService', () => {
       updatedAt: new Date().toISOString(),
     });
     vi.spyOn(SessionService.prototype, 'listPrerequisites').mockResolvedValue([]);
+    vi.spyOn(SessionService.prototype, 'getPersistedExplanation').mockResolvedValue(null);
+    const upsertPersistedExplanation = vi
+      .spyOn(SessionService.prototype, 'upsertPersistedExplanation')
+      .mockResolvedValue(undefined);
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue(null);
     vi.spyOn(SessionService.prototype, 'insertLessonPackage').mockResolvedValue(true);
     vi.spyOn(TutorService.prototype, 'generateExplanation').mockResolvedValue(
@@ -364,11 +369,163 @@ describe('LearningOrchestratorService', () => {
     });
     expect(conceptLearning.quiz).toBeNull();
     expect(conceptLearning.recap).toBeNull();
+    expect(conceptLearning.explanation).toBeNull();
     expect(explanation.explanation.length).toBeGreaterThan(0);
+    expect(upsertPersistedExplanation).toHaveBeenCalledWith({
+      sessionId: '55555555-5555-5555-5555-555555555555',
+      conceptId: '66666666-6666-6666-6666-666666666666',
+      explanation: 'Giai thich bang tieng Viet',
+    });
     expect(quiz.quiz.status).toBe('active');
     expect(quiz.quiz.questions[0]?.options[0]).not.toHaveProperty('isCorrect');
     expect(insertActiveQuiz).toHaveBeenCalledTimes(1);
     expect(Array.isArray(graph.concepts)).toBe(true);
+  });
+
+  it('creates a voice turn, persists transcript history, and returns audio metadata', async () => {
+    const mockSession = {
+      id: '55555555-5555-5555-5555-555555555555',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      goal_title: 'OOP',
+      source_topic: 'OOP',
+      source_text: 'Class là bản thiết kế, object là thực thể được tạo từ class.',
+      status: 'ready' as const,
+      current_concept_id: '66666666-6666-6666-6666-666666666666',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const mockConcept = {
+      id: '66666666-6666-6666-6666-666666666666',
+      session_id: mockSession.id,
+      canonical_name: 'oop-introduction',
+      display_name: 'Giới thiệu về OOP',
+      description: 'OOP tổ chức chương trình quanh object và class.',
+      difficulty: 0.2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    vi.spyOn(SessionService.prototype, 'findSessionByIdForUser').mockResolvedValue(mockSession);
+    vi.spyOn(SessionService.prototype, 'findSessionById').mockResolvedValue(mockSession);
+    vi.spyOn(SessionService.prototype, 'findConceptById').mockResolvedValue(mockConcept);
+    vi.spyOn(SessionService.prototype, 'getConceptMastery').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'listPrerequisites').mockResolvedValue([]);
+    vi.spyOn(SessionService.prototype, 'getPersistedExplanation').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue({
+      version: 1,
+      regenerationReason: 'initial',
+      feynmanExplanation: 'Class là bản thiết kế, object là chiếc xe thật.',
+      metaphorImage: {
+        imageUrl: 'data:image/svg+xml;charset=UTF-8,<svg/>',
+        prompt: 'Garage OOP',
+      },
+      imageMapping: [],
+      imageReadingText: 'Bản thiết kế là class.',
+      technicalTranslation: 'Class định nghĩa cấu trúc, object là thực thể cụ thể.',
+      prerequisiteMiniLessons: [],
+    });
+    vi.spyOn(SessionService.prototype, 'getLatestVoiceSummary').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'insertVoiceTurn').mockResolvedValue({
+      id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      summaryVersion: 1,
+    });
+    vi.spyOn(VoiceTutorService.prototype, 'reply').mockResolvedValue({
+      replyText: 'Class là bản thiết kế, object là chiếc xe thật.',
+      audio: {
+        mimeType: 'audio/mpeg',
+        base64Audio: 'ZmFrZQ==',
+      },
+      summary: 'Người học đã hỏi lại về class và object.',
+    });
+
+    const service = new LearningOrchestratorService();
+    const result = await service.createVoiceTurn({
+      userId: '11111111-1111-1111-1111-111111111111',
+      sessionId: mockSession.id,
+      conceptId: mockConcept.id,
+      lessonVersion: 1,
+      transcriptFallback: 'giải thích lại giúp tôi class và object',
+    });
+
+    expect(result.assistantAudio?.mimeType).toBe('audio/mpeg');
+    expect(result.learnerTranscript).toContain('class');
+    expect(result.assistantTranscript).toContain('Class là bản thiết kế');
+    expect(result.summaryVersion).toBe(1);
+    expect(result.suggestQuiz).toBe(false);
+  });
+
+  it('prefers server transcription for audio input and falls back to transcriptFallback if transcription fails', async () => {
+    const mockSession = {
+      id: '55555555-5555-5555-5555-555555555555',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      goal_title: 'OOP',
+      source_topic: 'OOP',
+      source_text: 'Class là bản thiết kế, object là thực thể được tạo từ class.',
+      status: 'ready' as const,
+      current_concept_id: '66666666-6666-6666-6666-666666666666',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const mockConcept = {
+      id: '66666666-6666-6666-6666-666666666666',
+      session_id: mockSession.id,
+      canonical_name: 'oop-introduction',
+      display_name: 'Giới thiệu về OOP',
+      description: 'OOP tổ chức chương trình quanh object và class.',
+      difficulty: 0.2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    vi.spyOn(SessionService.prototype, 'findSessionByIdForUser').mockResolvedValue(mockSession);
+    vi.spyOn(SessionService.prototype, 'findSessionById').mockResolvedValue(mockSession);
+    vi.spyOn(SessionService.prototype, 'findConceptById').mockResolvedValue(mockConcept);
+    vi.spyOn(SessionService.prototype, 'getConceptMastery').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'listPrerequisites').mockResolvedValue([]);
+    vi.spyOn(SessionService.prototype, 'getPersistedExplanation').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue({
+      version: 1,
+      regenerationReason: 'initial',
+      feynmanExplanation: 'Class là bản thiết kế, object là chiếc xe thật.',
+      metaphorImage: {
+        imageUrl: 'data:image/svg+xml;charset=UTF-8,<svg/>',
+        prompt: 'Garage OOP',
+      },
+      imageMapping: [],
+      imageReadingText: 'Bản thiết kế là class.',
+      technicalTranslation: 'Class định nghĩa cấu trúc, object là thực thể cụ thể.',
+      prerequisiteMiniLessons: [],
+    });
+    vi.spyOn(SessionService.prototype, 'getLatestVoiceSummary').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'insertVoiceTurn').mockResolvedValue({
+      id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      summaryVersion: 2,
+    });
+    vi.spyOn(VoiceTutorService.prototype, 'reply').mockResolvedValue({
+      replyText: 'Class là bản thiết kế, object là chiếc xe thật.',
+      audio: null,
+      summary: 'Người học đã hỏi lại về class và object.',
+    });
+    const transcribeLearnerAudio = vi
+      .spyOn(VoiceTutorService.prototype, 'transcribeLearnerAudio')
+      .mockRejectedValueOnce(new Error('upstream transcription failed'));
+
+    const service = new LearningOrchestratorService();
+    const result = await service.createVoiceTurn({
+      userId: '11111111-1111-1111-1111-111111111111',
+      sessionId: mockSession.id,
+      conceptId: mockConcept.id,
+      lessonVersion: 1,
+      transcriptFallback: 'class là bản thiết kế đúng không',
+      audioInput: {
+        mimeType: 'audio/webm;codecs=opus',
+        base64Audio: 'ZmFrZQ==',
+      },
+    });
+
+    expect(transcribeLearnerAudio).toHaveBeenCalledOnce();
+    expect(result.learnerTranscript).toBe('class là bản thiết kế đúng không');
+    expect(result.summaryVersion).toBe(2);
   });
 
   it('rejects session creation when graph generation produces no usable concepts', async () => {

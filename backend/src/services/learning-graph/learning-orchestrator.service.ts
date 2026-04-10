@@ -376,6 +376,7 @@ export class LearningOrchestratorService {
     return {
       ...conceptPayload,
       lessonPackage,
+      explanation: conceptPayload.explanation ?? null,
       quiz: null,
       recap: null,
     };
@@ -384,11 +385,25 @@ export class LearningOrchestratorService {
   async generateExplanation(input: { userId: string; sessionId: string; conceptId: string }) {
     await this.assertSessionAccess(input.userId, input.sessionId);
     const payload = await this.sessionService.getConceptLearningPayload(input.sessionId, input.conceptId);
+
+    if (payload.explanation) {
+      return {
+        conceptId: input.conceptId,
+        explanation: payload.explanation,
+      };
+    }
+
     const explanation = await this.tutorService.generateExplanation({
       conceptName: payload.concept?.displayName ?? 'Khái niệm hiện tại',
       conceptDescription: payload.concept?.description ?? '',
       masteryScore: payload.mastery?.masteryScore ?? 0,
       missingPrerequisites: payload.prerequisites.map((item) => item.displayName),
+    });
+
+    await this.sessionService.upsertPersistedExplanation({
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
+      explanation,
     });
 
     return {
@@ -468,14 +483,57 @@ export class LearningOrchestratorService {
     return this.sessionService.getGraph(input.sessionId);
   }
 
-  async askVoiceTutor(input: {
+  async createVoiceTurn(input: {
     userId: string;
     sessionId: string;
     conceptId: string;
-    learnerUtterance: string;
+    lessonVersion: number;
+    transcriptFallback?: string;
+    audioInput?: {
+      mimeType: string;
+      base64Audio: string;
+    };
   }) {
     await this.assertSessionAccess(input.userId, input.sessionId);
-    const payload = await this.getConceptLearning(input);
+    const payload = await this.getConceptLearning({
+      userId: input.userId,
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
+    });
+    let learnerTranscript = input.transcriptFallback?.trim() || '';
+
+    if (input.audioInput) {
+      try {
+        const transcribed = await this.voiceTutorService.transcribeLearnerAudio({
+          audioBuffer: Buffer.from(input.audioInput.base64Audio, 'base64'),
+          mimeType: input.audioInput.mimeType,
+        });
+
+        if (transcribed.trim()) {
+          learnerTranscript = transcribed.trim();
+        }
+      } catch (error) {
+        logger.warn('Voice tutor transcription failed, falling back to client transcript if present', {
+          sessionId: input.sessionId,
+          conceptId: input.conceptId,
+          hasTranscriptFallback: Boolean(learnerTranscript),
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        if (!learnerTranscript) {
+          throw error;
+        }
+      }
+    }
+
+    if (!learnerTranscript) {
+      throw new AppError(
+        'Không nhận được nội dung câu hỏi từ lượt nói hiện tại.',
+        400,
+        ERROR_CODES.INVALID_INPUT
+      );
+    }
+
     const previousSummaryRecord = await this.sessionService.getLatestVoiceSummary(
       input.sessionId,
       input.conceptId,
@@ -486,18 +544,44 @@ export class LearningOrchestratorService {
       lessonPackage: payload.lessonPackage,
       prerequisiteNames: payload.prerequisites.map((item) => item.displayName),
       priorSummary: previousSummaryRecord?.summary ?? null,
-      learnerUtterance: input.learnerUtterance,
+      learnerUtterance: learnerTranscript,
     });
-    const summaryVersion = await this.sessionService.insertVoiceSummary({
+    const persisted = await this.sessionService.insertVoiceTurn({
       sessionId: input.sessionId,
       conceptId: input.conceptId,
       lessonVersion: payload.lessonPackage.version,
+      learnerTranscript,
+      assistantTranscript: reply.replyText,
       summary: reply.summary,
     });
 
     return {
-      replyText: reply.replyText,
-      summaryVersion,
+      learnerTranscript,
+      assistantTranscript: reply.replyText,
+      assistantAudio: reply.audio,
+      summaryVersion: persisted.summaryVersion,
+      suggestQuiz: false,
+    };
+  }
+
+  async getVoiceHistory(input: {
+    userId: string;
+    sessionId: string;
+    conceptId: string;
+  }) {
+    await this.assertSessionAccess(input.userId, input.sessionId);
+    const payload = await this.getConceptLearning({
+      userId: input.userId,
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
+    });
+
+    return {
+      turns: await this.sessionService.listVoiceTurns(
+        input.sessionId,
+        input.conceptId,
+        payload.lessonPackage.version
+      ),
     };
   }
 }

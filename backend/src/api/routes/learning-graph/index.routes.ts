@@ -3,18 +3,15 @@ import { verifyUser, type AuthRequest } from '@/api/middlewares/auth.js';
 import { successResponse } from '@/utils/response.js';
 import {
   createLearningSessionRequestSchema,
+  createVoiceTurnRequestSchema,
   submitConceptQuizRequestSchema,
 } from '@insforge/shared-schemas';
 import { LearningOrchestratorService } from '@/services/learning-graph/learning-orchestrator.service.js';
 import { AppError } from '@/api/middlewares/error.js';
 import { ERROR_CODES } from '@/types/error-constants.js';
-import { z } from 'zod';
 
 const router = Router();
 const orchestrator = new LearningOrchestratorService();
-const voiceSandboxRequestSchema = z.object({
-  learnerUtterance: z.string().trim().min(1).max(2000),
-});
 
 router.get('/', verifyUser, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -140,20 +137,40 @@ router.post(
 );
 
 router.post(
-  '/:sessionId/concepts/:conceptId/voice-sandbox',
+  '/:sessionId/concepts/:conceptId/voice-turns',
   verifyUser,
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-      const parsed = voiceSandboxRequestSchema.safeParse(req.body);
+      const parsed = createVoiceTurnRequestSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError(JSON.stringify(parsed.error.issues), 400, ERROR_CODES.INVALID_INPUT);
       }
 
-      const result = await orchestrator.askVoiceTutor({
+      const result = await orchestrator.createVoiceTurn({
         userId: req.user!.id,
         sessionId: req.params.sessionId,
         conceptId: req.params.conceptId,
-        learnerUtterance: parsed.data.learnerUtterance,
+        lessonVersion: parsed.data.lessonVersion,
+        transcriptFallback: parsed.data.transcriptFallback,
+        audioInput: parsed.data.audioInput,
+      });
+
+      successResponse(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.get(
+  '/:sessionId/concepts/:conceptId/voice-history',
+  verifyUser,
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const result = await orchestrator.getVoiceHistory({
+        userId: req.user!.id,
+        sessionId: req.params.sessionId,
+        conceptId: req.params.conceptId,
       });
 
       successResponse(res, result);

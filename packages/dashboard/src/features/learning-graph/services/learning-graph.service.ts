@@ -1,17 +1,22 @@
 import { apiClient } from '../../../lib/api/client';
 import type {
   ConceptQuizSchema,
-  SessionConceptMasterySchema,
-  SessionConceptSchema,
+  CreateVoiceTurnRequestSchema,
+  CreateVoiceTurnResponseSchema,
   CreateLearningSessionRequestSchema,
   CreateLearningSessionResponseSchema,
   GenerateConceptExplanationResponseSchema,
   GetConceptQuizResponseSchema,
   GetLearningGraphResponseSchema,
+  GetVoiceHistoryResponseSchema,
   GetLearningSessionLibraryResponseSchema,
   GetLearningSessionResponseSchema,
+  SessionConceptMasterySchema,
+  SessionConceptSchema,
   SubmitConceptQuizRequestSchema,
   SubmitConceptQuizResponseSchema,
+  VoiceHistoryTurnSchema,
+  VoiceTutorAudioSchema,
 } from '@insforge/shared-schemas';
 
 export interface LessonPackagePayload {
@@ -47,14 +52,15 @@ export interface ConceptLearningPayload {
   mastery: SessionConceptMasterySchema | null;
   prerequisites: SessionConceptSchema[];
   lessonPackage: LessonPackagePayload;
+  explanation: string | null;
   quiz: ConceptQuizSchema | null;
   recap: ConceptRecapPayload | null;
 }
 
-export interface VoiceTutorReplyPayload {
-  replyText: string;
-  summaryVersion: number;
-}
+export type VoiceTutorAudioPayload = VoiceTutorAudioSchema;
+export type VoiceTutorHistoryTurn = VoiceHistoryTurnSchema;
+export type VoiceTutorTurnPayload = CreateVoiceTurnResponseSchema;
+export type VoiceTutorHistoryPayload = GetVoiceHistoryResponseSchema;
 
 export class LearningGraphService {
   async createSession(
@@ -123,15 +129,24 @@ export class LearningGraphService {
     });
   }
 
-  async askVoiceTutor(
+  async createVoiceTurn(
     sessionId: string,
     conceptId: string,
-    learnerUtterance: string
-  ): Promise<VoiceTutorReplyPayload> {
-    return apiClient.request(`/learning-sessions/${sessionId}/concepts/${conceptId}/voice-sandbox`, {
+    input: CreateVoiceTurnRequestSchema
+  ): Promise<VoiceTutorTurnPayload> {
+    return apiClient.request(`/learning-sessions/${sessionId}/concepts/${conceptId}/voice-turns`, {
       method: 'POST',
       headers: apiClient.withAccessToken(),
-      body: JSON.stringify({ learnerUtterance }),
+      body: JSON.stringify(input),
+    });
+  }
+
+  async getVoiceHistory(
+    sessionId: string,
+    conceptId: string
+  ): Promise<VoiceTutorHistoryPayload> {
+    return apiClient.request(`/learning-sessions/${sessionId}/concepts/${conceptId}/voice-history`, {
+      headers: apiClient.withAccessToken(),
     });
   }
 }

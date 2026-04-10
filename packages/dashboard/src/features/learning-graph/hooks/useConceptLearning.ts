@@ -22,6 +22,21 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
 
   const explanationMutation = useMutation({
     mutationFn: () => learningGraphService.generateExplanation(sessionId!, conceptId!),
+    onSuccess: (result) => {
+      queryClient.setQueryData(
+        ['learning-graph', 'concept', sessionId, conceptId],
+        (previous: unknown) => {
+          if (!previous || typeof previous !== 'object') {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            explanation: result.explanation,
+          };
+        }
+      );
+    },
     onError: (error: Error) => {
       showToast(error.message || 'Không thể tạo giải thích lúc này', 'error');
     },
@@ -67,7 +82,7 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
     mastery: conceptLearning?.mastery ?? null,
     prerequisites: conceptLearning?.prerequisites ?? [],
     graph: graphQuery.data ?? { concepts: [], edges: [] },
-    explanation: explanationMutation.data?.explanation ?? '',
+    explanation: explanationMutation.data?.explanation ?? conceptLearning?.explanation ?? '',
     activeQuiz: conceptLearning?.quiz ?? null,
     isLoadingConcept: conceptQuery.isLoading,
     isLoadingConceptLearning: conceptQuery.isLoading,

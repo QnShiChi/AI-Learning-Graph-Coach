@@ -95,6 +95,10 @@ interface SessionConceptQuizRecord {
   expiredAt: string | null;
 }
 
+interface SessionConceptExplanationDto {
+  explanationText: string;
+}
+
 type Queryable = Pool | PoolClient;
 
 export class SessionService {
@@ -687,6 +691,32 @@ export class SessionService {
     return parsedLessonPackage.success ? parsedLessonPackage.data : null;
   }
 
+  async getPersistedExplanation(sessionId: string, conceptId: string): Promise<string | null> {
+    const result = await this.db.getPool().query<SessionConceptExplanationDto>(
+      `SELECT explanation_text AS "explanationText"
+       FROM public.session_concept_explanations
+       WHERE session_id = $1 AND concept_id = $2
+       LIMIT 1`,
+      [sessionId, conceptId]
+    );
+
+    return result.rows[0]?.explanationText ?? null;
+  }
+
+  async upsertPersistedExplanation(input: {
+    sessionId: string;
+    conceptId: string;
+    explanation: string;
+  }): Promise<void> {
+    await this.db.getPool().query(
+      `INSERT INTO public.session_concept_explanations (id, session_id, concept_id, explanation_text)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (session_id, concept_id)
+       DO UPDATE SET explanation_text = EXCLUDED.explanation_text, updated_at = NOW()`,
+      [crypto.randomUUID(), input.sessionId, input.conceptId, input.explanation]
+    );
+  }
+
   async insertLessonPackage(input: {
     sessionId: string;
     conceptId: string;
@@ -779,6 +809,99 @@ export class SessionService {
     });
   }
 
+  async insertVoiceTurn(input: {
+    sessionId: string;
+    conceptId: string;
+    lessonVersion: number;
+    learnerTranscript: string;
+    assistantTranscript: string;
+    summary: string;
+  }): Promise<{ id: string; summaryVersion: number }> {
+    return this.withTransaction(async (client) => {
+      await this.lockSession(input.sessionId, client);
+      const id = crypto.randomUUID();
+
+      const result = await client.query<{ summaryVersion: number }>(
+        `WITH next_version AS (
+           SELECT COALESCE(MAX(summary_version), 0)::int + 1 AS summary_version
+           FROM public.session_concept_voice_summaries
+           WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
+         )
+         INSERT INTO public.session_concept_voice_summaries
+           (id, session_id, concept_id, lesson_version, summary_version, summary_payload)
+         SELECT
+           $4,
+           $1,
+           $2,
+           $3,
+           next_version.summary_version,
+           $5::jsonb
+         FROM next_version
+         RETURNING summary_version AS "summaryVersion"`,
+        [
+          input.sessionId,
+          input.conceptId,
+          input.lessonVersion,
+          id,
+          JSON.stringify({
+            summary: input.summary,
+            learnerTranscript: input.learnerTranscript,
+            assistantTranscript: input.assistantTranscript,
+          }),
+        ]
+      );
+
+      return {
+        id,
+        summaryVersion: result.rows[0]?.summaryVersion ?? 1,
+      };
+    });
+  }
+
+  async listVoiceTurns(sessionId: string, conceptId: string, lessonVersion: number): Promise<
+    Array<{
+      id: string;
+      learnerTranscript: string;
+      assistantTranscript: string;
+      lessonVersion: number;
+      createdAt: string;
+    }>
+  > {
+    const result = await this.db.getPool().query<{
+      id: string;
+      summaryPayload: {
+        learnerTranscript?: string;
+        assistantTranscript?: string;
+      } | null;
+      lessonVersion: number;
+      createdAt: string;
+    }>(
+      `SELECT
+         id,
+         summary_payload AS "summaryPayload",
+         lesson_version AS "lessonVersion",
+         created_at AS "createdAt"
+       FROM public.session_concept_voice_summaries
+       WHERE session_id = $1 AND concept_id = $2 AND lesson_version = $3
+       ORDER BY summary_version ASC`,
+      [sessionId, conceptId, lessonVersion]
+    );
+
+    return result.rows
+      .filter(
+        (record) =>
+          Boolean(record.summaryPayload?.learnerTranscript) &&
+          Boolean(record.summaryPayload?.assistantTranscript)
+      )
+      .map((record) => ({
+        id: record.id,
+        learnerTranscript: record.summaryPayload?.learnerTranscript ?? '',
+        assistantTranscript: record.summaryPayload?.assistantTranscript ?? '',
+        lessonVersion: record.lessonVersion,
+        createdAt: record.createdAt,
+      }));
+  }
+
   async getGraph(sessionId: string) {
     const [concepts, edges] = await Promise.all([
       this.db.getPool().query(
@@ -850,17 +973,19 @@ export class SessionService {
   }
 
   async getConceptLearningPayload(sessionId: string, conceptId: string) {
-    const [session, concept, mastery, prerequisites] = await Promise.all([
+    const [session, concept, mastery, prerequisites, explanation] = await Promise.all([
       this.findSessionById(sessionId),
       this.findConceptById(sessionId, conceptId),
       this.getConceptMastery(sessionId, conceptId),
       this.listPrerequisites(sessionId, conceptId),
+      this.getPersistedExplanation(sessionId, conceptId),
     ]);
 
     return {
       session: this.mapSession(session),
       concept: this.mapConcept(concept),
       mastery,
+      explanation,
       prerequisites: prerequisites
         .map((item) => this.mapConcept(item))
         .filter((item): item is SessionConceptDto => item !== null),

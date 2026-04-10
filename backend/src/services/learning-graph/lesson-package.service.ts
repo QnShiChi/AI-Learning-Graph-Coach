@@ -12,6 +12,16 @@ export class LessonPackageService {
   private sessionService = new SessionService();
   private tutorService = new TutorService();
 
+  private isLegacyLessonPackage(lessonPackage: LessonPackageSchema) {
+    return (
+      lessonPackage.feynmanExplanation.includes('chỗ sai') ||
+      lessonPackage.feynmanExplanation.includes('lần ngược') ||
+      lessonPackage.imageReadingText.includes('sửa lỗi từng bước') ||
+      lessonPackage.metaphorImage.imageUrl.includes('example.com/learning-graph') ||
+      lessonPackage.technicalTranslation.includes('Nguồn học tập hiện tại nhấn mạnh:')
+    );
+  }
+
   async getOrCreateCurrentLessonPackage(input: {
     sessionId: string;
     conceptId: string;
@@ -27,7 +37,42 @@ export class LessonPackageService {
     );
 
     if (currentLessonPackage) {
-      return lessonPackageSchema.parse(currentLessonPackage);
+      const parsedCurrentLessonPackage = lessonPackageSchema.parse(currentLessonPackage);
+
+      if (!this.isLegacyLessonPackage(parsedCurrentLessonPackage)) {
+        return parsedCurrentLessonPackage;
+      }
+
+      const regeneratedLessonPackage = lessonPackageSchema.parse(
+        await this.tutorService.generateLessonPackage({
+          conceptName: input.conceptName,
+          conceptDescription: input.conceptDescription,
+          sourceText: input.sourceText,
+          masteryScore: input.masteryScore,
+          missingPrerequisites: input.prerequisites,
+          regenerationReason: 'simpler_reexplain',
+          version: parsedCurrentLessonPackage.version + 1,
+        })
+      );
+
+      const insertedRegeneratedLessonPackage = await this.sessionService.insertLessonPackage({
+        sessionId: input.sessionId,
+        conceptId: input.conceptId,
+        lessonPackage: regeneratedLessonPackage,
+      });
+
+      if (!insertedRegeneratedLessonPackage) {
+        const persistedRegeneratedLessonPackage = await this.sessionService.getCurrentLessonPackage(
+          input.sessionId,
+          input.conceptId
+        );
+
+        if (persistedRegeneratedLessonPackage) {
+          return lessonPackageSchema.parse(persistedRegeneratedLessonPackage);
+        }
+      }
+
+      return regeneratedLessonPackage;
     }
 
     const generatedLessonPackage = lessonPackageSchema.parse(
