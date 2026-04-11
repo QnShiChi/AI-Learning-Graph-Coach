@@ -1,10 +1,12 @@
 import { Check, Lock, Sparkles } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { cn } from '../../../lib/utils/utils';
+import type { KnowledgeGraphThemeTokens } from '../lib/knowledge-graph-theme';
 import type { KnowledgeGraphRenderNode } from '../lib/knowledge-graph-view-model';
 
 export type KnowledgeGraphCanvasNodeData = {
   node: KnowledgeGraphRenderNode;
+  theme: KnowledgeGraphThemeTokens;
 };
 
 export type KnowledgeGraphCanvasNode = Node<KnowledgeGraphCanvasNodeData, 'knowledgeConcept'>;
@@ -51,6 +53,7 @@ function getBadgeIcon(state: KnowledgeGraphRenderNode['state']) {
 
 export function KnowledgeGraphNode({ data }: NodeProps<KnowledgeGraphCanvasNode>) {
   const node = data.node;
+  const theme = data.theme;
   const difficultyAngle = Math.max(12, Math.round(node.difficulty * 360));
   const masteryScore = node.masteryScore ?? 0;
   const masteryAngle = Math.round(masteryScore * 360);
@@ -64,6 +67,10 @@ export function KnowledgeGraphNode({ data }: NodeProps<KnowledgeGraphCanvasNode>
         isCurrent && 'scale-[1.08]',
         nodeStateStyles[node.state]
       )}
+      style={{
+        borderColor: theme.nodeBorder,
+        color: theme.textPrimary,
+      }}
     >
       <Handle
         type="target"
@@ -103,7 +110,10 @@ export function KnowledgeGraphNode({ data }: NodeProps<KnowledgeGraphCanvasNode>
       ) : null}
 
       {isCurrent ? (
-        <div className="pointer-events-none absolute inset-0 rounded-[24px] shadow-[0_0_56px_rgba(56,189,248,0.18)] animate-[pulse_4s_ease-in-out_infinite]" />
+        <div
+          className="pointer-events-none absolute inset-0 rounded-[24px] animate-[pulse_4s_ease-in-out_infinite]"
+          style={{ boxShadow: theme.currentGlow }}
+        />
       ) : null}
 
       <div className="relative flex items-start justify-between gap-3">
@@ -113,13 +123,19 @@ export function KnowledgeGraphNode({ data }: NodeProps<KnowledgeGraphCanvasNode>
           </p>
           <h3 className="text-sm font-semibold leading-5">{node.label}</h3>
         </div>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/8 text-current">
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-current"
+          style={{ borderColor: theme.nodeBorder, background: 'rgba(255,255,255,0.08)' }}
+        >
           {getBadgeIcon(node.state) ?? <span className="text-[10px] font-semibold">{Math.round(node.difficulty * 100)}</span>}
         </span>
       </div>
 
       <div className="relative mt-5 flex items-center justify-between gap-3 text-[11px]">
-        <span className="rounded-full border border-white/12 bg-white/8 px-2.5 py-1 font-medium uppercase tracking-[0.12em] text-current/90">
+        <span
+          className="rounded-full bg-white/8 px-2.5 py-1 font-medium uppercase tracking-[0.12em] text-current/90"
+          style={{ border: `1px solid ${theme.nodeBorder}` }}
+        >
           {stateLabels[node.state]}
         </span>
         {node.masteryScore !== null ? (

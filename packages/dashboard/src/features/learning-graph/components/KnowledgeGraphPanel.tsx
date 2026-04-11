@@ -6,8 +6,11 @@ import type {
 } from '@insforge/shared-schemas';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { useTheme } from '../../../lib/contexts/ThemeContext';
+import { cn } from '../../../lib/utils/utils';
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas';
 import { KnowledgeGraphDetailPanel } from './KnowledgeGraphDetailPanel';
+import { getKnowledgeGraphTheme } from '../lib/knowledge-graph-theme';
 import {
   buildKnowledgeGraphViewModel,
   type KnowledgeGraphMode,
@@ -42,14 +45,23 @@ export function KnowledgeGraphPanel({
   onBack,
   onOpenConcept,
 }: KnowledgeGraphPanelProps) {
+  const { resolvedTheme } = useTheme();
+  const graphTheme = useMemo(() => getKnowledgeGraphTheme(resolvedTheme), [resolvedTheme]);
   const [mode, setMode] = useState<KnowledgeGraphMode>('full');
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(currentConceptId);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedConceptId && currentConceptId) {
       setSelectedConceptId(currentConceptId);
     }
   }, [currentConceptId, selectedConceptId]);
+
+  useEffect(() => {
+    if (selectedConceptId) {
+      setIsPanelOpen(true);
+    }
+  }, [selectedConceptId]);
 
   const viewModel = useMemo(
     () =>
@@ -106,6 +118,9 @@ export function KnowledgeGraphPanel({
           <KnowledgeGraphDetailPanel
             viewModel={viewModel}
             selectedConceptId={null}
+            isOpen
+            onOpenChange={setIsPanelOpen}
+            theme={graphTheme}
             onOpenConcept={() => undefined}
           />
         </div>
@@ -125,6 +140,9 @@ export function KnowledgeGraphPanel({
           <KnowledgeGraphDetailPanel
             viewModel={viewModel}
             selectedConceptId={null}
+            isOpen
+            onOpenChange={setIsPanelOpen}
+            theme={graphTheme}
             onOpenConcept={() => undefined}
           />
         </div>
@@ -141,12 +159,22 @@ export function KnowledgeGraphPanel({
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div
+          className={cn(
+            'grid gap-6',
+            isPanelOpen
+              ? 'xl:grid-cols-[minmax(0,1fr)_340px]'
+              : 'xl:grid-cols-[minmax(0,1fr)_56px]'
+          )}
+        >
           <KnowledgeGraphCanvas viewModel={viewModel} onSelectNode={setSelectedConceptId} />
           <div className="xl:sticky xl:top-6 xl:self-start">
             <KnowledgeGraphDetailPanel
               viewModel={viewModel}
               selectedConceptId={selectedConceptId}
+              isOpen={isPanelOpen}
+              onOpenChange={setIsPanelOpen}
+              theme={graphTheme}
               onOpenConcept={() => {
                 if (selectedConceptId) {
                   onOpenConcept(selectedConceptId);

@@ -1,8 +1,10 @@
 import { BaseEdge, getBezierPath, type Edge, type EdgeProps } from '@xyflow/react';
+import type { KnowledgeGraphThemeTokens } from '../lib/knowledge-graph-theme';
 import type { KnowledgeGraphRenderEdge } from '../lib/knowledge-graph-view-model';
 
 export type KnowledgeGraphCanvasEdgeData = {
   edge: KnowledgeGraphRenderEdge;
+  theme: KnowledgeGraphThemeTokens;
 };
 
 export type KnowledgeGraphCanvasEdge = Edge<KnowledgeGraphCanvasEdgeData, 'knowledgeEdge'>;
@@ -25,6 +27,7 @@ export function KnowledgeGraphEdge({
     muted: false,
     highlighted: false,
   };
+  const theme = data?.theme;
   const [path] = getBezierPath({
     sourceX,
     sourceY,
@@ -37,10 +40,10 @@ export function KnowledgeGraphEdge({
 
   const stroke =
     edge.kind === 'path'
-      ? 'rgba(103,232,249,0.95)'
+      ? theme?.edgePath ?? 'rgba(103,232,249,0.95)'
       : edge.muted
-        ? 'rgba(148,163,184,0.18)'
-        : 'rgba(148,163,184,0.42)';
+        ? theme?.edgeMuted ?? 'rgba(148,163,184,0.18)'
+        : theme?.edgePrerequisite ?? 'rgba(148,163,184,0.42)';
 
   return (
     <BaseEdge
