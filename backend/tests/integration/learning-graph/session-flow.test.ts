@@ -410,22 +410,15 @@ describe('LearningOrchestratorService', () => {
 
     expect(conceptLearning.lessonPackage).toMatchObject({
       version: 1,
+      formatVersion: 2,
       regenerationReason: 'initial',
-      feynmanExplanation: expect.any(String),
-      metaphorImage: {
-        imageUrl: expect.any(String),
-        prompt: expect.any(String),
+      mainLesson: {
+        definition: expect.any(String),
+        importance: expect.any(String),
+        corePoints: expect.any(Array),
+        technicalExample: expect.any(String),
+        commonMisconceptions: expect.any(Array),
       },
-      imageMapping: expect.arrayContaining([
-        expect.objectContaining({
-          visualElement: expect.any(String),
-          everydayMeaning: expect.any(String),
-          technicalMeaning: expect.any(String),
-          teachingPurpose: expect.any(String),
-        }),
-      ]),
-      imageReadingText: expect.any(String),
-      technicalTranslation: expect.any(String),
     });
     expect(conceptLearning.quiz).toBeNull();
     expect(conceptLearning.recap).toBeNull();
@@ -477,15 +470,15 @@ describe('LearningOrchestratorService', () => {
     vi.spyOn(SessionService.prototype, 'getPersistedExplanation').mockResolvedValue(null);
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue({
       version: 1,
+      formatVersion: 2,
       regenerationReason: 'initial',
-      feynmanExplanation: 'Class là bản thiết kế, object là chiếc xe thật.',
-      metaphorImage: {
-        imageUrl: 'data:image/svg+xml;charset=UTF-8,<svg/>',
-        prompt: 'Garage OOP',
+      mainLesson: {
+        definition: 'OOP tổ chức chương trình quanh object và class.',
+        importance: 'Giúp mô hình hóa dữ liệu và hành vi theo từng thực thể.',
+        corePoints: ['Class là khuôn mẫu.', 'Object là thực thể cụ thể.'],
+        technicalExample: 'const car = new Car();',
+        commonMisconceptions: ['Class không phải object cụ thể.'],
       },
-      imageMapping: [],
-      imageReadingText: 'Bản thiết kế là class.',
-      technicalTranslation: 'Class định nghĩa cấu trúc, object là thực thể cụ thể.',
       prerequisiteMiniLessons: [],
     });
     vi.spyOn(SessionService.prototype, 'getLatestVoiceSummary').mockResolvedValue(null);
@@ -549,15 +542,15 @@ describe('LearningOrchestratorService', () => {
     vi.spyOn(SessionService.prototype, 'getPersistedExplanation').mockResolvedValue(null);
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue({
       version: 1,
+      formatVersion: 2,
       regenerationReason: 'initial',
-      feynmanExplanation: 'Class là bản thiết kế, object là chiếc xe thật.',
-      metaphorImage: {
-        imageUrl: 'data:image/svg+xml;charset=UTF-8,<svg/>',
-        prompt: 'Garage OOP',
+      mainLesson: {
+        definition: 'OOP tổ chức chương trình quanh object và class.',
+        importance: 'Giúp mô hình hóa dữ liệu và hành vi theo từng thực thể.',
+        corePoints: ['Class là khuôn mẫu.', 'Object là thực thể cụ thể.'],
+        technicalExample: 'const car = new Car();',
+        commonMisconceptions: ['Class không phải object cụ thể.'],
       },
-      imageMapping: [],
-      imageReadingText: 'Bản thiết kế là class.',
-      technicalTranslation: 'Class định nghĩa cấu trúc, object là thực thể cụ thể.',
       prerequisiteMiniLessons: [],
     });
     vi.spyOn(SessionService.prototype, 'getLatestVoiceSummary').mockResolvedValue(null);

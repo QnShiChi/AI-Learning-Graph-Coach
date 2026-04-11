@@ -43,6 +43,45 @@ export class TutorService {
     return highlights.slice(0, maxItems);
   }
 
+  private buildAcademicLesson(input: {
+    conceptName: string;
+    conceptDescription: string;
+    sourceHighlights: string[];
+  }) {
+    const descriptionSentence = this.toSentence(
+      input.conceptDescription ||
+        `${input.conceptName} là một phần kiến thức quan trọng trong phiên học hiện tại.`
+    );
+    const normalizedHighlights = input.sourceHighlights.map((item) => this.toSentence(item)).filter(Boolean);
+    const definition = normalizedHighlights[0] ?? descriptionSentence;
+    const importance =
+      normalizedHighlights[1] ??
+      `Hiểu rõ ${input.conceptName} giúp bạn đọc đúng cấu trúc, giải thích đúng cơ chế, và áp dụng kiến thức nhất quán hơn.`;
+    const corePoints = (normalizedHighlights.length > 0
+      ? normalizedHighlights.slice(0, 3)
+      : [descriptionSentence]
+    ).filter(Boolean);
+    const technicalExample =
+      normalizedHighlights.find((item) =>
+        /header|main|section|article|nav|footer|const |class |function |=>|<|>|\(|\)|\[|\]/i.test(item)
+      ) ??
+      `Ví dụ kỹ thuật: ${input.conceptName} được dùng trong ngữ cảnh ${input.conceptDescription.toLowerCase()}`;
+    const commonMisconceptions = [
+      `${input.conceptName} không nên bị hiểu chỉ như một mẹo ghi nhớ hay một phép so sánh đời thường.`,
+      normalizedHighlights[0]
+        ? `Không nên nhầm ${input.conceptName} với việc chỉ lặp lại nguyên văn ý "${normalizedHighlights[0]}".`
+        : '',
+    ].filter(Boolean);
+
+    return {
+      definition,
+      importance,
+      corePoints,
+      technicalExample,
+      commonMisconceptions,
+    };
+  }
+
   private inferLessonMetaphor(input: {
     conceptName: string;
     conceptDescription: string;
@@ -278,47 +317,18 @@ export class TutorService {
     const sourceText =
       input.sourceText?.trim() ||
       `Nguồn học tập hiện tại xoay quanh ${conceptName} và cách áp dụng nó vào phiên học này.`;
-    const primaryPrerequisite = input.missingPrerequisites[0] ?? null;
-    const prerequisiteNames = input.missingPrerequisites.map((item) => item.displayName);
     const sourceHighlights = this.extractSourceHighlights(sourceText);
-    const metaphor = this.inferLessonMetaphor({
+    const mainLesson = this.buildAcademicLesson({
       conceptName,
       conceptDescription,
       sourceHighlights,
-      primaryPrerequisite,
     });
-    const technicalHighlights =
-      sourceHighlights.length > 0
-        ? `\n\nTrong phần học này, hãy giữ lại ${Math.min(sourceHighlights.length, 3)} ý chính:\n${sourceHighlights
-            .slice(0, 3)
-            .map((item) => `- ${item}`)
-            .join('\n')}`
-        : '';
 
     return lessonPackageSchema.parse({
       version: input.version ?? 1,
+      formatVersion: 2,
       regenerationReason: input.regenerationReason ?? 'initial',
-      feynmanExplanation: this.buildFeynmanExplanation({
-        conceptName,
-        conceptDescription,
-        masteryScore: input.masteryScore,
-        missingPrerequisites: prerequisiteNames,
-        shortMetaphor: metaphor.shortMetaphor,
-        sourceHighlights,
-      }),
-      metaphorImage: {
-        imageUrl: this.buildSvgDataUrl({
-          title: conceptName,
-          subtitle: metaphor.prompt,
-          accentLabel: primaryPrerequisite
-            ? `Noi voi ${primaryPrerequisite.displayName}`
-            : 'Vi du doi thuong',
-        }),
-        prompt: metaphor.prompt,
-      },
-      imageMapping: metaphor.mappings,
-      imageReadingText: metaphor.readingText,
-      technicalTranslation: `${metaphor.technicalFocus}${technicalHighlights}`,
+      mainLesson,
       prerequisiteMiniLessons: input.missingPrerequisites.map((item) => ({
         prerequisiteConceptId: item.id,
         title: `Ôn lại ${item.displayName}`,

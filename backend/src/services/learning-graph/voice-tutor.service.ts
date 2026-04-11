@@ -7,8 +7,13 @@ const DEFAULT_REPLY_TEXT = 'Mình chưa nghe rõ, bạn nói lại giúp mình n
 const MAX_SUMMARY_LENGTH = 1200;
 
 interface VoiceTutorLessonContext {
-  feynmanExplanation: string;
-  technicalTranslation: string;
+  mainLesson: {
+    definition: string;
+    importance: string;
+    corePoints: string[];
+    technicalExample: string;
+    commonMisconceptions: string[];
+  };
 }
 
 interface VoiceTutorReplyInput {
@@ -82,14 +87,17 @@ export class VoiceTutorService {
           {
             role: 'system',
             content:
-              'Bạn là một người bạn học giỏi cùng lớp. Hãy trả lời bằng tiếng Việt đơn giản, chỉ bám vào khái niệm hiện tại, prerequisites liên quan và nội dung bài học đang hiển thị. Nếu người học hỏi ngoài phạm vi này, hãy kéo họ về khái niệm hiện tại. Trả lời ngắn gọn, rõ ý, dễ hiểu trong tối đa 3 câu ngắn. Không dùng markdown nhấn mạnh như ** hoặc *. Chỉ khi người học xin ví dụ code thì mới dùng fenced code block ba dấu backtick với ngôn ngữ phù hợp.',
+              'Bạn là một người bạn học giỏi cùng lớp. Hãy trả lời bằng tiếng Việt, bám vào khái niệm hiện tại, prerequisites liên quan và nội dung bài học học thuật đang hiển thị. Trả lời đúng câu hỏi người học. Nếu họ xin giải thích dễ hiểu hơn, hãy đơn giản hóa cách diễn đạt nhưng không đổi bản chất khái niệm. Nếu họ hỏi ngoài phạm vi này, hãy kéo họ về khái niệm hiện tại. Trả lời ngắn gọn, rõ ý, tối đa 3 câu ngắn. Không dùng markdown nhấn mạnh như ** hoặc *. Chỉ khi người học xin ví dụ code thì mới dùng fenced code block ba dấu backtick với ngôn ngữ phù hợp.',
           },
           {
             role: 'user',
             content: [
               `Khái niệm hiện tại: ${input.conceptName}`,
-              `Bài học hiện tại: ${input.lessonPackage.feynmanExplanation}`,
-              `Diễn giải kỹ thuật: ${input.lessonPackage.technicalTranslation}`,
+              `Khái niệm là gì: ${input.lessonPackage.mainLesson.definition}`,
+              `Vì sao quan trọng: ${input.lessonPackage.mainLesson.importance}`,
+              `Ý cốt lõi: ${input.lessonPackage.mainLesson.corePoints.join(' | ')}`,
+              `Ví dụ kỹ thuật: ${input.lessonPackage.mainLesson.technicalExample}`,
+              `Điểm dễ hiểu sai: ${input.lessonPackage.mainLesson.commonMisconceptions.join(' | ') || 'không có'}`,
               `Prerequisites liên quan: ${input.prerequisiteNames.join(', ') || 'không có'}`,
               `Tóm tắt hội thoại trước: ${input.priorSummary ?? 'chưa có'}`,
               `Người học hỏi: ${input.learnerUtterance}`,

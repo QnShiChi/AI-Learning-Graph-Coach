@@ -2,7 +2,6 @@ import { Button } from '@insforge/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ConceptExplanationCard,
   ConceptLessonCard,
   ConceptMasteryCard,
   ConceptQuizCard,
@@ -92,11 +91,20 @@ export default function ConceptLearningPage() {
     return () => window.clearTimeout(timer);
   }, [conceptLearning?.quiz, shouldScrollToQuiz]);
 
+  const voiceTutorOpeningText = conceptLearning
+    ? [
+        conceptLearning.lessonPackage.mainLesson.definition,
+        conceptLearning.lessonPackage.mainLesson.importance,
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : '';
+
   const voiceTutor = useVoiceTutor({
     sessionId,
     conceptId,
     lessonVersion: conceptLearning?.lessonPackage.version,
-    openingText: conceptLearning?.lessonPackage.feynmanExplanation ?? '',
+    openingText: voiceTutorOpeningText,
     onConfirmQuiz: handleRevealQuiz,
   });
   const voiceTutorStatus = getVoiceTutorStatusCopy({
@@ -133,23 +141,17 @@ export default function ConceptLearningPage() {
     <ConceptLessonCard
       conceptName={conceptLearning.concept.displayName}
       lesson={conceptLearning.lessonPackage}
+      easyExplanation={explanation}
       recapSummary={conceptLearning.recap?.summary ?? null}
       onRevealQuiz={handleRevealQuiz}
-      onRegenerateExplanation={generateExplanation}
+      onRequestEasyExplanation={generateExplanation}
       isRevealingQuiz={isRevealingQuiz}
-      isRegeneratingExplanation={isGeneratingExplanation}
+      isGeneratingEasyExplanation={isGeneratingExplanation}
     />
   );
 
   const studyFlowSections = conceptLearning ? (
     <div className="space-y-6">
-      <ConceptExplanationCard
-        explanation={explanation}
-        prerequisites={conceptLearning.prerequisites.map((item) => item.displayName)}
-        onGenerate={generateExplanation}
-        isLoading={isGeneratingExplanation}
-      />
-
       <div ref={quizSectionRef}>
         {conceptLearning.quiz ? (
           <ConceptQuizCard
@@ -234,7 +236,7 @@ export default function ConceptLearningPage() {
             badge={voiceTutorStatus.badge}
             helperText={voiceTutorStatus.helper}
             conceptName={conceptLearning.concept.displayName}
-            openingText={conceptLearning.lessonPackage.feynmanExplanation}
+            openingText={voiceTutorOpeningText}
             currentLearnerTranscript={voiceTutor.currentLearnerTranscript}
             pendingLearnerTranscript={voiceTutor.pendingLearnerTranscript}
             liveAssistantTranscript={voiceTutor.liveAssistantTranscript}

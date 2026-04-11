@@ -8,35 +8,25 @@ import {
   sessionEdgeSchema,
 } from './learning-graph.schema.js';
 
-export const lessonImageMappingItemSchema = z.object({
-  visualElement: z.string(),
-  everydayMeaning: z.string(),
-  technicalMeaning: z.string(),
-  teachingPurpose: z.string(),
+export const academicLessonSchema = z.object({
+  definition: z.string(),
+  importance: z.string(),
+  corePoints: z.array(z.string()).min(1),
+  technicalExample: z.string(),
+  commonMisconceptions: z.array(z.string()).default([]),
 });
 
 export const lessonPackageSchema = z.object({
   version: z.number().int().min(1),
+  formatVersion: z.literal(2),
   regenerationReason: z.enum([
     'initial',
     'failed_quiz',
     'simpler_reexplain',
     'prerequisite_refresh',
+    'academic_redesign',
   ]),
-  feynmanExplanation: z.string(),
-  metaphorImage: z.object({
-    imageUrl: z
-      .string()
-      .min(1)
-      .refine(
-        (value) => value.startsWith('data:image/') || /^https?:\/\//.test(value),
-        'Expected an http(s) URL or data image URL'
-      ),
-    prompt: z.string(),
-  }),
-  imageMapping: z.array(lessonImageMappingItemSchema),
-  imageReadingText: z.string(),
-  technicalTranslation: z.string(),
+  mainLesson: academicLessonSchema,
   prerequisiteMiniLessons: z
     .array(
       z.object({
@@ -192,7 +182,7 @@ export type GenerateConceptExplanationResponseSchema = z.infer<
 >;
 export type SubmitConceptQuizResponseSchema = z.infer<typeof submitConceptQuizResponseSchema>;
 export type GetLearningGraphResponseSchema = z.infer<typeof getLearningGraphResponseSchema>;
-export type LessonImageMappingItemSchema = z.infer<typeof lessonImageMappingItemSchema>;
+export type AcademicLessonSchema = z.infer<typeof academicLessonSchema>;
 export type LessonPackageSchema = z.infer<typeof lessonPackageSchema>;
 export type VoiceTutorAudioSchema = z.infer<typeof voiceTutorAudioSchema>;
 export type CreateVoiceTurnRequestSchema = z.infer<typeof createVoiceTurnRequestSchema>;

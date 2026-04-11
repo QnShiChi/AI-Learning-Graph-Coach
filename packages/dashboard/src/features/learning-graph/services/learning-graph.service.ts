@@ -21,20 +21,20 @@ import type {
 
 export interface LessonPackagePayload {
   version: number;
-  regenerationReason: 'initial' | 'failed_quiz' | 'simpler_reexplain' | 'prerequisite_refresh';
-  feynmanExplanation: string;
-  metaphorImage: {
-    imageUrl: string;
-    prompt: string;
+  formatVersion: 2;
+  regenerationReason:
+    | 'initial'
+    | 'failed_quiz'
+    | 'simpler_reexplain'
+    | 'prerequisite_refresh'
+    | 'academic_redesign';
+  mainLesson: {
+    definition: string;
+    importance: string;
+    corePoints: string[];
+    technicalExample: string;
+    commonMisconceptions: string[];
   };
-  imageMapping: Array<{
-    visualElement: string;
-    everydayMeaning: string;
-    technicalMeaning: string;
-    teachingPurpose: string;
-  }>;
-  imageReadingText: string;
-  technicalTranslation: string;
   prerequisiteMiniLessons: Array<{
     prerequisiteConceptId: string;
     title: string;

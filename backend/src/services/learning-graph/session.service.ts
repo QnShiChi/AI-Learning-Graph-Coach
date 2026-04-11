@@ -351,7 +351,7 @@ export class SessionService {
       ]
     );
 
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   async expireActiveQuiz(
@@ -384,7 +384,7 @@ export class SessionService {
       [input.quizId]
     );
 
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   async insertQuizAttempt(
@@ -737,7 +737,7 @@ export class SessionService {
       ]
     );
 
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getLatestVoiceSummary(

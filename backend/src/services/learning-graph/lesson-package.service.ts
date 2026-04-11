@@ -12,14 +12,17 @@ export class LessonPackageService {
   private sessionService = new SessionService();
   private tutorService = new TutorService();
 
-  private isLegacyLessonPackage(lessonPackage: LessonPackageSchema) {
-    return (
-      lessonPackage.feynmanExplanation.includes('chỗ sai') ||
-      lessonPackage.feynmanExplanation.includes('lần ngược') ||
-      lessonPackage.imageReadingText.includes('sửa lỗi từng bước') ||
-      lessonPackage.metaphorImage.imageUrl.includes('example.com/learning-graph') ||
-      lessonPackage.technicalTranslation.includes('Nguồn học tập hiện tại nhấn mạnh:')
-    );
+  private isAcademicLessonPackage(value: unknown): value is LessonPackageSchema {
+    return lessonPackageSchema.safeParse(value).success;
+  }
+
+  private resolveNextVersion(value: unknown) {
+    if (!value || typeof value !== 'object' || !('version' in value)) {
+      return 1;
+    }
+
+    const version = Number((value as { version?: unknown }).version ?? 1);
+    return Number.isFinite(version) && version >= 1 ? version + 1 : 1;
   }
 
   async getOrCreateCurrentLessonPackage(input: {
@@ -36,13 +39,11 @@ export class LessonPackageService {
       input.conceptId
     );
 
+    if (this.isAcademicLessonPackage(currentLessonPackage)) {
+      return currentLessonPackage;
+    }
+
     if (currentLessonPackage) {
-      const parsedCurrentLessonPackage = lessonPackageSchema.parse(currentLessonPackage);
-
-      if (!this.isLegacyLessonPackage(parsedCurrentLessonPackage)) {
-        return parsedCurrentLessonPackage;
-      }
-
       const regeneratedLessonPackage = lessonPackageSchema.parse(
         await this.tutorService.generateLessonPackage({
           conceptName: input.conceptName,
@@ -50,8 +51,8 @@ export class LessonPackageService {
           sourceText: input.sourceText,
           masteryScore: input.masteryScore,
           missingPrerequisites: input.prerequisites,
-          regenerationReason: 'simpler_reexplain',
-          version: parsedCurrentLessonPackage.version + 1,
+          regenerationReason: 'academic_redesign',
+          version: this.resolveNextVersion(currentLessonPackage),
         })
       );
 

@@ -53,7 +53,7 @@ interface BuildQuizForConceptInput {
   conceptName: string;
   conceptDescription: string;
   explanationSummary: string;
-  exampleOrAnalogy: string | null;
+  technicalExample: string | null;
   missingPrerequisites: string[];
   learnerMastery: number | null;
   difficultyTarget?: ConceptQuizDifficultySchema;
@@ -171,7 +171,7 @@ export class QuizService {
 
   resolveQuestionCountTarget(input: {
     learnerMastery: number | null;
-    exampleOrAnalogy: string | null;
+    technicalExample: string | null;
     missingPrerequisites: string[];
     lessonPackage: LessonPackageSchema;
   }) {
@@ -180,8 +180,8 @@ export class QuizService {
     }
 
     const richnessScore = [
-      input.exampleOrAnalogy ? 1 : 0,
-      input.lessonPackage.imageMapping.length > 0 ? 1 : 0,
+      input.technicalExample ? 1 : 0,
+      input.lessonPackage.mainLesson.commonMisconceptions.length > 0 ? 1 : 0,
       input.lessonPackage.prerequisiteMiniLessons.length > 0 ? 1 : 0,
       input.learnerMastery >= 0.7 ? 1 : 0,
     ].reduce((sum, value) => sum + value, 0);
@@ -247,7 +247,7 @@ export class QuizService {
           conceptName: input.conceptName,
           conceptDescription: input.conceptDescription,
           explanationSummary: input.explanationSummary,
-          exampleOrAnalogy: input.exampleOrAnalogy,
+          technicalExample: input.technicalExample,
           missingPrerequisites: input.missingPrerequisites,
           learnerMastery: input.learnerMastery,
           difficultyTarget: input.difficultyTarget,
@@ -286,7 +286,7 @@ export class QuizService {
 
   private buildDefinitionQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion {
     const correctAnswer = this.compactText(
-      input.explanationSummary || input.lessonPackage.technicalTranslation || input.conceptDescription
+      input.explanationSummary || input.lessonPackage.mainLesson.definition || input.conceptDescription
     );
 
     return {
@@ -304,61 +304,15 @@ export class QuizService {
     };
   }
 
-  private buildAnalogyQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion | null {
-    const primaryMapping = input.lessonPackage.imageMapping[0];
-
-    if (primaryMapping) {
-      const correctAnswer = this.compactText(primaryMapping.technicalMeaning);
-      const distractors = this.uniqueTexts([
-        this.compactText(primaryMapping.everydayMeaning),
-        this.compactText(primaryMapping.teachingPurpose),
-        'Chi tiết này chỉ để trang trí ví dụ.',
-        'Nó nói về một chủ đề khác của bài học.',
-      ])
-        .filter((item) => this.normalize(item) !== this.normalize(correctAnswer))
-        .slice(0, 3);
-
-      if (distractors.length === 3) {
-        return {
-          question: `Trong ví dụ minh họa, "${primaryMapping.visualElement}" tương ứng với ý nào?`,
-          options: [correctAnswer, ...distractors],
-          correctAnswer,
-          explanationShort: 'Câu này kiểm tra khả năng nối ví dụ trực giác với ý nghĩa kỹ thuật.',
-          difficulty: 'medium',
-          skillTag: 'analogy',
-        };
-      }
-    }
-
-    if (input.exampleOrAnalogy) {
-      const correctAnswer = this.compactText(input.explanationSummary || input.conceptDescription);
-      return {
-        question: `Ví dụ trực giác trong bài được dùng để làm rõ điều gì về ${input.conceptName}?`,
-        options: [
-          correctAnswer,
-          'Chỉ để mô tả màu sắc của ví dụ.',
-          'Chỉ để nhớ tên của tác giả bài học.',
-          'Chỉ để kéo dài phần mở bài.',
-        ],
-        correctAnswer,
-        explanationShort: 'Ví dụ trực giác chỉ là cầu nối để hiểu đúng khái niệm kỹ thuật.',
-        difficulty: 'medium',
-        skillTag: 'analogy',
-      };
-    }
-
-    return null;
-  }
-
   private buildMisconceptionQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion {
     const truths = this.uniqueTexts([
       this.compactText(input.conceptDescription),
       this.compactText(input.explanationSummary),
-      this.compactText(input.lessonPackage.technicalTranslation),
-      this.compactText(input.lessonPackage.imageMapping[0]?.technicalMeaning ?? ''),
+      this.compactText(input.lessonPackage.mainLesson.definition),
+      ...input.lessonPackage.mainLesson.commonMisconceptions.map((item) => this.compactText(item)),
       `${input.conceptName} có ý nghĩa kỹ thuật riêng trong bài.`,
       `${input.conceptName} cần được hiểu qua ý chính của concept.`,
-      `${input.conceptName} không chỉ là ví dụ đời thường.`,
+      `${input.conceptName} không nên bị hiểu như một mẹo ghi nhớ rời rạc.`,
     ])
       .filter((item) => this.normalize(item) !== this.normalize(`${input.conceptName} chỉ là tên khác của ví dụ minh họa.`))
       .slice(0, 3);
@@ -384,8 +338,8 @@ export class QuizService {
     const correctAnswer = this.compactText(prerequisite.title);
     const distractors = this.uniqueTexts([
       this.compactText(input.conceptName),
-      this.compactText(input.lessonPackage.imageMapping[0]?.visualElement ?? ''),
-      this.compactText(input.lessonPackage.imageReadingText),
+      this.compactText(input.lessonPackage.mainLesson.technicalExample),
+      this.compactText(input.lessonPackage.mainLesson.definition),
       ...QuizService.GENERIC_FALSE_STATEMENTS,
     ])
       .filter((item) => this.normalize(item) !== this.normalize(correctAnswer))
@@ -407,8 +361,9 @@ export class QuizService {
 
   private buildApplicationQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion {
     const correctAnswer = this.compactText(
-      input.lessonPackage.imageMapping[0]?.teachingPurpose ||
-        input.lessonPackage.technicalTranslation ||
+      input.technicalExample ||
+        input.lessonPackage.mainLesson.technicalExample ||
+        input.lessonPackage.mainLesson.importance ||
         input.explanationSummary
     );
 
@@ -435,9 +390,9 @@ export class QuizService {
   ): GeneratedQuizQuestion[] {
     const candidates = [
       this.buildDefinitionQuestion(input),
-      this.buildAnalogyQuestion(input),
       this.buildMisconceptionQuestion(input),
       this.buildPrerequisiteQuestion(input) ?? this.buildApplicationQuestion(input),
+      this.buildApplicationQuestion(input),
     ].filter((question): question is GeneratedQuizQuestion => question !== null);
 
     const selected = candidates.slice(0, input.questionCountTarget);
@@ -457,7 +412,7 @@ export class QuizService {
     const difficultyTarget = input.difficultyTarget ?? this.resolveDifficultyTarget(input.learnerMastery);
     const questionCountTarget = this.resolveQuestionCountTarget({
       learnerMastery: input.learnerMastery,
-      exampleOrAnalogy: input.exampleOrAnalogy,
+      technicalExample: input.technicalExample,
       missingPrerequisites: input.missingPrerequisites,
       lessonPackage: input.lessonPackage,
     });

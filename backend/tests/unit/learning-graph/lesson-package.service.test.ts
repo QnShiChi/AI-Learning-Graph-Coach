@@ -11,22 +11,21 @@ describe('LessonPackageService', () => {
   it('returns the persisted current lesson package without regenerating it', async () => {
     const persistedLessonPackage = {
       version: 1,
+      formatVersion: 2 as const,
       regenerationReason: 'initial' as const,
-      feynmanExplanation: 'Backpropagation truyền lỗi ngược từ đầu ra về các tầng trước đó.',
-      metaphorImage: {
-        imageUrl: 'https://example.com/backpropagation.png',
-        prompt: 'A river flowing backward through connected water gates',
+      mainLesson: {
+        definition: 'Backpropagation là quá trình lan truyền sai số từ output về các tầng trước đó.',
+        importance: 'Nó cho phép mạng nơ-ron tính gradient để cập nhật trọng số.',
+        corePoints: [
+          'Sai số được lan truyền ngược qua từng tầng.',
+          'Chain rule được dùng để tính gradient của từng tham số.',
+        ],
+        technicalExample:
+          'Sau khi tính loss ở output, mạng dùng chain rule để suy ra gradient của từng trọng số.',
+        commonMisconceptions: [
+          'Backpropagation không phải là bước cập nhật tham số; nó là bước tính gradient.',
+        ],
       },
-      imageMapping: [
-        {
-          visualElement: 'Dòng nước chảy ngược',
-          everydayMeaning: 'Thông tin phản hồi quay lại điểm xuất phát',
-          technicalMeaning: 'Gradient được lan truyền ngược qua mạng',
-          teachingPurpose: 'Giúp người học hình dung chiều cập nhật trọng số',
-        },
-      ],
-      imageReadingText: 'Hãy nhìn dòng nước ngược để tưởng tượng cách lỗi quay lại từng lớp.',
-      technicalTranslation: 'Về mặt kỹ thuật, gradient của loss được tính bằng chain rule.',
       prerequisiteMiniLessons: [],
     };
 
@@ -65,23 +64,23 @@ describe('LessonPackageService', () => {
 
     const generatedLessonPackage = {
       version: 1,
+      formatVersion: 2 as const,
       regenerationReason: 'initial' as const,
-      feynmanExplanation: 'Backpropagation giống như xem lại từng bước sai ở cuối bài để sửa từ đầu.',
-      metaphorImage: {
-        imageUrl: 'https://example.com/backpropagation-initial.png',
-        prompt: 'A teacher tracing a mistake backward across connected notes',
+      mainLesson: {
+        definition:
+          'Backpropagation là quá trình lan truyền sai số ngược qua các tầng để tính gradient.',
+        importance:
+          'Nó giúp mô hình biết cần điều chỉnh trọng số nào để giảm loss trong lần học tiếp theo.',
+        corePoints: [
+          'Sai số bắt đầu từ output rồi đi ngược về hidden layers.',
+          'Chain rule nối gradient của từng tầng thành gradient tổng thể.',
+        ],
+        technicalExample:
+          'Từ loss ở output, mạng tính đạo hàm theo từng trọng số ở các tầng trước bằng chain rule.',
+        commonMisconceptions: [
+          'Backpropagation không đồng nghĩa với gradient descent.',
+        ],
       },
-      imageMapping: [
-        {
-          visualElement: 'Giáo viên lần ngược các ghi chú',
-          everydayMeaning: 'Xem lỗi xuất hiện từ đâu',
-          technicalMeaning: 'Lan truyền gradient qua từng tầng',
-          teachingPurpose: 'Nối trực giác sửa lỗi với cơ chế cập nhật trọng số',
-        },
-      ],
-      imageReadingText: 'Hình ảnh nhấn mạnh rằng ta bắt đầu ở kết quả sai rồi lần ngược về nguyên nhân.',
-      technicalTranslation:
-        'Trong mạng nơ-ron, chain rule cho phép tính gradient của từng tham số từ loss.',
       prerequisiteMiniLessons: [
         {
           prerequisiteConceptId: '77777777-7777-7777-7777-777777777777',
@@ -140,22 +139,20 @@ describe('LessonPackageService', () => {
   it('re-reads the persisted lesson package when a concurrent insert wins first', async () => {
     const generatedLessonPackage = {
       version: 1,
+      formatVersion: 2 as const,
       regenerationReason: 'initial' as const,
-      feynmanExplanation: 'Gradient Descent giống như đi xuống dốc để tìm điểm thấp nhất.',
-      metaphorImage: {
-        imageUrl: 'https://example.com/gradient-descent.png',
-        prompt: 'A person walking downhill toward the lowest point in a valley',
+      mainLesson: {
+        definition:
+          'Gradient descent cập nhật tham số theo hướng làm loss giảm dần qua nhiều lần lặp.',
+        importance: 'Đây là cơ chế tối ưu cốt lõi giúp mô hình học từ dữ liệu.',
+        corePoints: [
+          'Gradient cho biết hướng loss tăng mạnh nhất.',
+          'Ta đi ngược gradient để giảm loss.',
+        ],
+        technicalExample:
+          'w = w - learningRate * gradient là công thức cập nhật trọng số cơ bản.',
+        commonMisconceptions: ['Gradient descent không tự tính gradient; nó dùng gradient đã có.'],
       },
-      imageMapping: [
-        {
-          visualElement: 'Người đi xuống dốc',
-          everydayMeaning: 'Đi từng bước để xuống thấp hơn',
-          technicalMeaning: 'Cập nhật tham số theo hướng giảm loss',
-          teachingPurpose: 'Giúp người học hình dung quá trình tối ưu lặp lại',
-        },
-      ],
-      imageReadingText: 'Mỗi bước xuống dốc tượng trưng cho một lần cập nhật tham số.',
-      technicalTranslation: 'Gradient descent cập nhật tham số theo negative gradient của loss.',
       prerequisiteMiniLessons: [],
     };
 
@@ -179,52 +176,32 @@ describe('LessonPackageService', () => {
     expect(result).toEqual(generatedLessonPackage);
   });
 
-  it('regenerates a current lesson package when the persisted payload is a legacy placeholder', async () => {
+  it('regenerates legacy payloads into formatVersion 2 lesson packages', async () => {
     const legacyLessonPackage = {
       version: 1,
       regenerationReason: 'initial' as const,
-      feynmanExplanation:
-        'Giới thiệu về OOP có thể hình dung như một quy trình tìm ra chỗ sai rồi lần ngược từng bước để sửa hệ thống.',
+      feynmanExplanation: 'HTML semantic giống như garage với bản thiết kế xe.',
       metaphorImage: {
-        imageUrl: 'https://example.com/learning-graph/gioi-thieu-ve-oop.png',
-        prompt: 'Minh hoạ Giới thiệu về OOP như một hệ thống lần ngược lỗi để sửa từng bước.',
+        imageUrl: 'https://example.com/legacy.png',
+        prompt: 'legacy prompt',
       },
-      imageMapping: [
-        {
-          visualElement: 'Một bảng điều khiển trung tâm',
-          everydayMeaning: 'Mọi tín hiệu đều quay về một nơi để kiểm tra lại.',
-          technicalMeaning: 'Khái niệm tổng hợp tín hiệu và điều chỉnh theo sai số quan sát được.',
-          teachingPurpose: 'Tạo một hình ảnh đơn giản để người học nhớ hướng đi của lời giải thích.',
-        },
-      ],
-      imageReadingText: 'Hãy tưởng tượng mọi tín hiệu quay về bảng điều khiển để sửa lỗi từng bước.',
-      technicalTranslation:
-        'Nguồn học tập hiện tại nhấn mạnh: Tôi muốn học lập trình hướng đối tượng (OOP) từ cơ bản...',
+      imageMapping: [],
+      imageReadingText: 'legacy',
+      technicalTranslation: 'legacy technical translation',
       prerequisiteMiniLessons: [],
     };
 
     const regeneratedLessonPackage = {
       version: 2,
-      regenerationReason: 'simpler_reexplain' as const,
-      feynmanExplanation:
-        'Giới thiệu về OOP có thể hiểu như một garage có bản thiết kế và nhiều chiếc xe được tạo từ cùng bản thiết kế đó.',
-      metaphorImage: {
-        imageUrl: 'data:image/svg+xml;charset=UTF-8,<svg/>',
-        prompt:
-          'Hình dung OOP như một garage: trên tường là bản thiết kế, dưới sàn là các object cụ thể.',
+      formatVersion: 2 as const,
+      regenerationReason: 'academic_redesign' as const,
+      mainLesson: {
+        definition: 'Semantic HTML dùng thẻ có ý nghĩa để mô tả cấu trúc nội dung.',
+        importance: 'Cấu trúc đúng giúp accessibility và maintainability tốt hơn.',
+        corePoints: ['header, main, section, article, nav, footer có vai trò khác nhau.'],
+        technicalExample: '<main><article><h1>Bài viết</h1></article></main>',
+        commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div.'],
       },
-      imageMapping: [
-        {
-          visualElement: 'Bản thiết kế treo trên tường',
-          everydayMeaning: 'Mẫu chung để mọi chiếc xe cùng làm theo.',
-          technicalMeaning: 'Class định nghĩa cấu trúc dữ liệu và hành vi chung của object.',
-          teachingPurpose: 'Phân biệt class với object.',
-        },
-      ],
-      imageReadingText:
-        'Bản thiết kế tượng trưng cho class, còn từng chiếc xe tượng trưng cho object.',
-      technicalTranslation:
-        'OOP tổ chức chương trình quanh class và object, trong đó class là khuôn mẫu còn object là thực thể cụ thể.',
       prerequisiteMiniLessons: [],
     };
 
@@ -242,20 +219,21 @@ describe('LessonPackageService', () => {
     const result = await service.getOrCreateCurrentLessonPackage({
       sessionId: '55555555-5555-5555-5555-555555555555',
       conceptId: '66666666-6666-6666-6666-666666666666',
-      conceptName: 'Giới thiệu về OOP',
-      conceptDescription: 'OOP xoay quanh object và class.',
-      sourceText: 'Class là bản thiết kế, object là thực thể được tạo từ bản thiết kế đó.',
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả cấu trúc nội dung.',
+      sourceText: 'Semantic HTML mô tả vai trò của từng vùng nội dung.',
       masteryScore: 0,
       prerequisites: [],
     });
 
+    expect(result.formatVersion).toBe(2);
     expect(generateLessonPackage).toHaveBeenCalledWith({
-      conceptName: 'Giới thiệu về OOP',
-      conceptDescription: 'OOP xoay quanh object và class.',
-      sourceText: 'Class là bản thiết kế, object là thực thể được tạo từ bản thiết kế đó.',
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả cấu trúc nội dung.',
+      sourceText: 'Semantic HTML mô tả vai trò của từng vùng nội dung.',
       masteryScore: 0,
       missingPrerequisites: [],
-      regenerationReason: 'simpler_reexplain',
+      regenerationReason: 'academic_redesign',
       version: 2,
     });
     expect(insertLessonPackage).toHaveBeenCalledWith({
