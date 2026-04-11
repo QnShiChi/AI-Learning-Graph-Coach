@@ -4,6 +4,50 @@ import { buildKnowledgeGraphViewModel } from '../knowledge-graph-view-model';
 const sessionId = '11111111-1111-1111-1111-111111111111';
 const now = '2026-04-11T09:00:00.000Z';
 
+function buildConcept(id: string, displayName: string, difficulty = 0.5) {
+  return {
+    id,
+    sessionId,
+    canonicalName: displayName.toLowerCase().replace(/\s+/g, '-'),
+    displayName,
+    description: `${displayName} description`,
+    difficulty,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function buildEdge(fromConceptId: string, toConceptId: string) {
+  return {
+    id: `edge-${fromConceptId}-${toConceptId}`,
+    sessionId,
+    fromConceptId,
+    toConceptId,
+    edgeType: 'prerequisite' as const,
+    weight: 0.7,
+    source: 'validation' as const,
+    createdAt: now,
+  };
+}
+
+function buildPathItem(
+  conceptId: string,
+  position: number,
+  pathState: 'completed' | 'current' | 'next' | 'upcoming' | 'locked'
+) {
+  return {
+    id: `path-${conceptId}`,
+    sessionId,
+    conceptId,
+    pathVersion: 1,
+    position,
+    pathState,
+    isCurrent: pathState === 'current',
+    supersededAt: null,
+    createdAt: now,
+  };
+}
+
 const graph = {
   concepts: [
     {
@@ -177,6 +221,43 @@ describe('buildKnowledgeGraphViewModel', () => {
         id: 'path-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb-cccccccc-cccc-cccc-cccc-cccccccccccc',
         kind: 'path',
       }),
+    ]);
+  });
+
+  it('prioritizes branch ordering so path nodes stay near the center of a level', () => {
+    const branchedGraph = {
+      concepts: [
+        buildConcept('root', 'Root', 0.2),
+        buildConcept('a', 'Branch A', 0.4),
+        buildConcept('b', 'Branch B', 0.45),
+        buildConcept('merge', 'Merge Node', 0.7),
+      ],
+      edges: [
+        buildEdge('root', 'a'),
+        buildEdge('root', 'b'),
+        buildEdge('a', 'merge'),
+        buildEdge('b', 'merge'),
+      ],
+    };
+
+    const result = buildKnowledgeGraphViewModel({
+      graph: branchedGraph,
+      pathSnapshot: [
+        buildPathItem('root', 0, 'completed'),
+        buildPathItem('a', 1, 'current'),
+        buildPathItem('merge', 2, 'next'),
+      ],
+      currentConceptId: 'a',
+      selectedConceptId: 'merge',
+      mode: 'full',
+      masteryByConceptId: {},
+    });
+
+    const levelOneNodes = result.nodes.filter((node) => node.level === 1);
+
+    expect(levelOneNodes.map((node) => [node.id, node.orderGroup, node.outgoingCount])).toEqual([
+      ['a', 'path', 1],
+      ['b', 'untracked', 1],
     ]);
   });
 });

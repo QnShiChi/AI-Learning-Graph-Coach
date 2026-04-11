@@ -22,6 +22,9 @@ export interface KnowledgeGraphRenderNode {
   state: KnowledgeGraphNodeState;
   level: number;
   order: number;
+  orderGroup: 'path' | 'branch' | 'untracked';
+  incomingCount: number;
+  outgoingCount: number;
   selected: boolean;
   missingPrerequisiteIds: string[];
   missingPrerequisiteLabels: string[];
@@ -49,6 +52,12 @@ export interface KnowledgeGraphViewModel {
     nextConceptLabel: string | null;
   };
 }
+
+const ORDER_GROUP_RANK: Record<KnowledgeGraphRenderNode['orderGroup'], number> = {
+  path: 0,
+  branch: 1,
+  untracked: 2,
+};
 
 function getNodeState(
   pathItem: SessionPathItemSchema | undefined,
@@ -128,7 +137,28 @@ export function buildKnowledgeGraphViewModel(input: {
 }): KnowledgeGraphViewModel {
   const conceptById = new Map(input.graph.concepts.map((concept) => [concept.id, concept]));
   const pathItemByConceptId = new Map(input.pathSnapshot.map((item) => [item.conceptId, item]));
-  const pathPositionByConceptId = new Map(input.pathSnapshot.map((item) => [item.conceptId, item.position]));
+  const pathPositionByConceptId = new Map(
+    input.pathSnapshot.map((item) => [item.conceptId, item.position] as const)
+  );
+  const incomingCountByConceptId = new Map<string, number>();
+  const outgoingCountByConceptId = new Map<string, number>();
+
+  for (const concept of input.graph.concepts) {
+    incomingCountByConceptId.set(concept.id, 0);
+    outgoingCountByConceptId.set(concept.id, 0);
+  }
+
+  for (const edge of input.graph.edges) {
+    incomingCountByConceptId.set(
+      edge.toConceptId,
+      (incomingCountByConceptId.get(edge.toConceptId) ?? 0) + 1
+    );
+    outgoingCountByConceptId.set(
+      edge.fromConceptId,
+      (outgoingCountByConceptId.get(edge.fromConceptId) ?? 0) + 1
+    );
+  }
+
   const visibleConceptIds =
     input.mode === 'path'
       ? new Set(input.pathSnapshot.map((item) => item.conceptId))
@@ -157,6 +187,12 @@ export function buildKnowledgeGraphViewModel(input: {
     .filter((concept) => visibleConceptIds.has(concept.id))
     .map((concept) => {
       const pathItem = pathItemByConceptId.get(concept.id);
+      const hasPathPosition = pathPositionByConceptId.has(concept.id);
+      const orderGroup: KnowledgeGraphRenderNode['orderGroup'] = hasPathPosition
+        ? 'path'
+        : pathItem
+          ? 'branch'
+          : 'untracked';
       const missingPrerequisiteIds = input.graph.edges
         .filter((edge) => edge.toConceptId === concept.id)
         .map((edge) => edge.fromConceptId)
@@ -171,6 +207,9 @@ export function buildKnowledgeGraphViewModel(input: {
         state: getNodeState(pathItem, input.currentConceptId),
         level: levelByConceptId.get(concept.id) ?? 0,
         order: pathPositionByConceptId.get(concept.id) ?? Number.MAX_SAFE_INTEGER,
+        orderGroup,
+        incomingCount: incomingCountByConceptId.get(concept.id) ?? 0,
+        outgoingCount: outgoingCountByConceptId.get(concept.id) ?? 0,
         selected: concept.id === input.selectedConceptId,
         missingPrerequisiteIds,
         missingPrerequisiteLabels: missingPrerequisiteIds.map(
@@ -178,10 +217,15 @@ export function buildKnowledgeGraphViewModel(input: {
         ),
       };
     })
-    .sort(
-      (left, right) =>
-        left.level - right.level || left.order - right.order || left.label.localeCompare(right.label)
-    );
+    .sort((left, right) => {
+      return (
+        left.level - right.level ||
+        ORDER_GROUP_RANK[left.orderGroup] - ORDER_GROUP_RANK[right.orderGroup] ||
+        right.outgoingCount - left.outgoingCount ||
+        left.order - right.order ||
+        left.label.localeCompare(right.label)
+      );
+    });
 
   const currentConcept = input.currentConceptId ? conceptById.get(input.currentConceptId) ?? null : null;
   const nextPathItem = input.pathSnapshot.find((item) => item.pathState === 'next') ?? null;
