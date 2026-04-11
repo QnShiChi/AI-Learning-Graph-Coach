@@ -576,6 +576,10 @@ export class LearningOrchestratorService {
       );
     }
 
+    if (!payload.concept) {
+      throw new AppError('Không tìm thấy khái niệm trong phiên học.', 404, ERROR_CODES.NOT_FOUND);
+    }
+
     const previousSummaryRecord = await this.sessionService.getLatestVoiceSummary(
       input.sessionId,
       input.conceptId,
