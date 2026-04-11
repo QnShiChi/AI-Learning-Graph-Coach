@@ -9,7 +9,7 @@ export interface QuizGenerationPromptInput {
   conceptName: string;
   conceptDescription: string;
   explanationSummary: string;
-  exampleOrAnalogy: string | null;
+  technicalExample: string | null;
   missingPrerequisites: string[];
   learnerMastery: number | null;
   difficultyTarget: ConceptQuizDifficultySchema;
@@ -130,8 +130,8 @@ export function buildQuizGenerationMessages(
   return [
     {
       role: 'system',
-      content:
-        'Bạn là hệ thống sinh quiz ngắn bằng tiếng Việt cho Learning Workspace. Hãy tạo quiz đo mức hiểu thật về concept hiện tại, không hỏi lại nguyên văn explanation, không hỏi meta về cách giải thích, không dùng đáp án dài. Mỗi câu chỉ kiểm tra một ý, có đúng 4 lựa chọn ngắn, đúng 1 đáp án đúng rõ ràng, distractor phải liên quan nhưng đủ khác để phân biệt người hiểu và chưa hiểu. Chỉ trả về DUY NHẤT một JSON hợp lệ, không markdown, không giải thích ngoài JSON.',
+    content:
+        'Bạn là hệ thống sinh quiz ngắn bằng tiếng Việt cho Learning Workspace. Hãy tạo quiz đo mức hiểu thật về concept hiện tại, không hỏi lại nguyên văn explanation, không hỏi meta về cách giải thích, không biến ví dụ kỹ thuật thành ẩn dụ đời thường vô căn cứ, và không dùng đáp án dài. Mỗi câu chỉ kiểm tra một ý, có đúng 4 lựa chọn ngắn, đúng 1 đáp án đúng rõ ràng, distractor phải liên quan nhưng đủ khác để phân biệt người hiểu và chưa hiểu. Chỉ trả về DUY NHẤT một JSON hợp lệ, không markdown, không giải thích ngoài JSON.',
     },
     {
       role: 'user',
@@ -165,7 +165,7 @@ ${JSON.stringify(
     concept_name: input.conceptName,
     concept_description: input.conceptDescription,
     explanation_summary: input.explanationSummary,
-    example_or_analogy: input.exampleOrAnalogy,
+    technical_example: input.technicalExample,
     missing_prerequisites: input.missingPrerequisites,
     learner_mastery: input.learnerMastery,
     difficulty_target: input.difficultyTarget,

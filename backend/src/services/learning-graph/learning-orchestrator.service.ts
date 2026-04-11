@@ -44,6 +44,26 @@ export class LearningOrchestratorService {
     return prerequisiteMap;
   }
 
+  private buildLessonSummary(lessonPackage: {
+    mainLesson: {
+      definition: string;
+      importance: string;
+      corePoints: string[];
+      technicalExample: string;
+      commonMisconceptions: string[];
+    };
+  }) {
+    return [
+      lessonPackage.mainLesson.definition,
+      lessonPackage.mainLesson.importance,
+      ...lessonPackage.mainLesson.corePoints,
+      lessonPackage.mainLesson.technicalExample,
+      ...lessonPackage.mainLesson.commonMisconceptions,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
   private resolvePersistedQuizOrThrow(quizPayload: unknown) {
     const quiz = this.quizService.parseStoredQuizPayload(quizPayload);
 
@@ -393,9 +413,23 @@ export class LearningOrchestratorService {
       };
     }
 
-    const explanation = await this.tutorService.generateExplanation({
+    const lessonPackage = await this.lessonPackageService.getOrCreateCurrentLessonPackage({
+      sessionId: input.sessionId,
+      conceptId: input.conceptId,
       conceptName: payload.concept?.displayName ?? 'Khái niệm hiện tại',
       conceptDescription: payload.concept?.description ?? '',
+      sourceText: payload.session?.sourceText ?? null,
+      masteryScore: payload.mastery?.masteryScore ?? 0,
+      prerequisites: payload.prerequisites.map((item) => ({
+        id: item.id,
+        displayName: item.displayName,
+        description: item.description,
+      })),
+    });
+
+    const explanation = await this.tutorService.generateExplanation({
+      conceptName: payload.concept?.displayName ?? 'Khái niệm hiện tại',
+      conceptDescription: this.buildLessonSummary(lessonPackage),
       masteryScore: payload.mastery?.masteryScore ?? 0,
       missingPrerequisites: payload.prerequisites.map((item) => item.displayName),
     });
@@ -457,8 +491,8 @@ export class LearningOrchestratorService {
       conceptId: input.conceptId,
       conceptName: conceptPayload.concept.displayName,
       conceptDescription: conceptPayload.concept.description,
-      explanationSummary: lessonPackage.technicalTranslation,
-      exampleOrAnalogy: lessonPackage.feynmanExplanation,
+      explanationSummary: this.buildLessonSummary(lessonPackage),
+      technicalExample: lessonPackage.mainLesson.technicalExample,
       missingPrerequisites: conceptPayload.prerequisites.map((item) => item.displayName),
       learnerMastery: conceptPayload.mastery?.masteryScore ?? null,
       difficultyTarget: this.quizService.resolveDifficultyTarget(

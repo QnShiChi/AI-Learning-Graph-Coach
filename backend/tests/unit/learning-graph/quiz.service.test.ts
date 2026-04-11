@@ -5,24 +5,21 @@ import type { LessonPackageSchema } from '@insforge/shared-schemas';
 
 const lessonPackage: LessonPackageSchema = {
   version: 1,
+  formatVersion: 2,
   regenerationReason: 'initial',
-  feynmanExplanation:
-    'Backpropagation có thể hình dung như lần theo dấu lỗi để biết cần sửa lớp nào trước.',
-  metaphorImage: {
-    imageUrl: 'https://example.com/learning-graph/backpropagation.png',
-    prompt: 'Mo ta backpropagation nhu viec lan theo dau vet loi.',
+  mainLesson: {
+    definition:
+      'Backpropagation là quá trình lan truyền sai số từ output về các lớp trước để tính gradient.',
+    importance:
+      'Nó giúp mô hình biết cần điều chỉnh trọng số nào để giảm loss trong lần học tiếp theo.',
+    corePoints: [
+      'Sai số được đẩy ngược qua các lớp.',
+      'Chain rule nối gradient của từng tầng thành gradient tổng thể.',
+    ],
+    technicalExample:
+      'Mạng dùng chain rule để suy ra gradient của từng trọng số sau khi tính loss.',
+    commonMisconceptions: ['Backpropagation không đồng nghĩa với gradient descent.'],
   },
-  imageMapping: [
-    {
-      visualElement: 'Mui ten quay nguoc',
-      everydayMeaning: 'Lan nguoc de tim noi gay loi',
-      technicalMeaning: 'Sai so duoc day nguoc qua mang',
-      teachingPurpose: 'Giu cho nguoi hoc nho huong truyen cua tin hieu loi',
-    },
-  ],
-  imageReadingText: 'Hinh anh nhac rang can lan nguoc qua tung lop de sua sai.',
-  technicalTranslation:
-    'Ve ky thuat, backpropagation tinh gradient bang cach lan truyen sai so nguoc qua cac lop.',
   prerequisiteMiniLessons: [
     {
       prerequisiteConceptId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
@@ -57,7 +54,7 @@ const makeQuizInput = () => ({
   conceptDescription: 'Backpropagation lan truyen loi tu output ve cac lop truoc.',
   explanationSummary:
     'Backpropagation tinh gradient bang cach lan truyen sai so nguoc qua cac lop.',
-  exampleOrAnalogy: 'Hinh dung nhu lan theo dau vet loi de tim noi can sua.',
+  technicalExample: 'Mạng dùng chain rule để suy ra gradient của từng trọng số.',
   missingPrerequisites: [],
   learnerMastery: 0.55,
   difficultyTarget: 'medium' as const,
@@ -73,16 +70,16 @@ describe('QuizService', () => {
             questions: [
               makeGeneratedQuestion(),
               makeGeneratedQuestion({
-                question: 'Trong ví dụ minh họa, mui ten quay nguoc dùng để gợi đến điều gì?',
+                question: 'Ví dụ kỹ thuật trong bài cho thấy Backpropagation dùng để làm gì?',
                 options: [
-                  'Sai số được đẩy ngược qua mạng',
-                  'Màu nền của giao diện tối',
-                  'Tên file ảnh minh họa',
-                  'Tài khoản người dùng mới',
+                  'Suy ra gradient của từng trọng số',
+                  'Đổi màu giao diện của ứng dụng',
+                  'Lưu file ảnh vào bucket',
+                  'Tạo phiên đăng nhập mới',
                 ],
-                correctAnswer: 'Sai số được đẩy ngược qua mạng',
+                correctAnswer: 'Suy ra gradient của từng trọng số',
                 difficulty: 'medium',
-                skillTag: 'analogy',
+                skillTag: 'application',
               }),
               makeGeneratedQuestion({
                 question: 'Điều nào là hiểu sai về Backpropagation?',
@@ -108,7 +105,7 @@ describe('QuizService', () => {
     expect(artifact.source).toBe('llm');
     expect(artifact.questionCountTarget).toBe(3);
     expect(artifact.questions).toHaveLength(3);
-    expect(clientQuiz.questions[1]?.skillTag).toBe('analogy');
+    expect(clientQuiz.questions[1]?.skillTag).toBe('application');
     expect(clientQuiz.questions[0]?.options[0]).not.toHaveProperty('isCorrect');
   });
 

@@ -22,8 +22,13 @@ describe('VoiceTutorService', () => {
     const result = await service.reply({
       conceptName: 'Giới thiệu về OOP',
       lessonPackage: {
-        feynmanExplanation: 'Class là bản thiết kế, object là chiếc xe thật.',
-        technicalTranslation: 'Class định nghĩa cấu trúc; object là thể hiện cụ thể.',
+        mainLesson: {
+          definition: 'OOP tổ chức chương trình quanh class và object.',
+          importance: 'Giúp gom dữ liệu và hành vi theo từng thực thể.',
+          corePoints: ['Class là khuôn mẫu.', 'Object là thực thể cụ thể.'],
+          technicalExample: 'const car = new Car();',
+          commonMisconceptions: ['Class không phải object đang chạy.'],
+        },
       },
       prerequisiteNames: [],
       priorSummary: null,
@@ -57,8 +62,13 @@ describe('VoiceTutorService', () => {
     await service.reply({
       conceptName: 'Class và Object',
       lessonPackage: {
-        feynmanExplanation: 'Class là bản thiết kế, object là chiếc xe.',
-        technicalTranslation: 'Class định nghĩa cấu trúc; object là instance.',
+        mainLesson: {
+          definition: 'Class định nghĩa cấu trúc, object là instance cụ thể.',
+          importance: 'Phân biệt hai khái niệm này giúp tổ chức chương trình đúng cách.',
+          corePoints: ['Class là khuôn mẫu.', 'Object mang trạng thái riêng.'],
+          technicalExample: 'const car = new Car();',
+          commonMisconceptions: ['Class không phải object cụ thể.'],
+        },
       },
       prerequisiteNames: [],
       priorSummary: null,
