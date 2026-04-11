@@ -127,7 +127,7 @@ export function ConceptLessonCard({
   const shortFeynman = feynmanParagraphs.slice(0, 2);
 
   return (
-    <article className="mx-auto max-w-4xl space-y-10 px-1 pb-10">
+    <article className="w-full space-y-10 px-1 pb-10">
       <header className="space-y-5 border-b border-[var(--alpha-8)] pb-8">
         <div className="space-y-4">
           <div className="space-y-2">

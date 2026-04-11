@@ -7,7 +7,7 @@
   "main": "../dist/server.js",
   "scripts": {
     "start": "node ../dist/server.js",
-    "dev": "dotenv -e ../.env -- tsx watch src/server.ts",
+    "dev": "dotenv -o -e ../.env -- tsx watch src/server.ts",
     "build": "tsup",
     "clean": "rimraf dist",
     "prebuild": "npm run clean",
@@ -22,8 +22,8 @@
     "migrate:down": "node-pg-migrate down --migrations-dir src/infra/database/migrations --migrations-schema system --migrations-table migrations",
     "migrate:create": "node-pg-migrate create --migrations-dir src/infra/database/migrations --migrations-schema system --migrations-table migrations",
     "migrate:redo": "npm run migrate:bootstrap && node-pg-migrate redo --migrations-dir src/infra/database/migrations --migrations-schema system --migrations-table migrations",
-    "migrate:up:local": "dotenv -e ../.env -- npm run migrate:bootstrap && dotenv -e ../.env -- node-pg-migrate up --migrations-dir src/infra/database/migrations --migrations-schema system --migrations-table migrations",
-    "migrate:down:local": "dotenv -e ../.env -- node-pg-migrate down --migrations-dir src/infra/database/migrations --migrations-schema system --migrations-table migrations"
+    "migrate:up:local": "dotenv -o -e ../.env -- npm run migrate:bootstrap && dotenv -o -e ../.env -- node-pg-migrate up --migrations-dir src/infra/database/migrations --migrations-schema system --migrations-table migrations",
+    "migrate:down:local": "dotenv -o -e ../.env -- node-pg-migrate down --migrations-dir src/infra/database/migrations --migrations-schema system --migrations-table migrations"
   },
   "keywords": [
     "backend-as-a-service",

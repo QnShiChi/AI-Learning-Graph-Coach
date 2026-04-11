@@ -1,5 +1,18 @@
-import { conceptQuizSchema, type ConceptQuizSchema, type LessonPackageSchema } from '@insforge/shared-schemas';
+import { ChatCompletionService } from '@/services/ai/chat-completion.service.js';
+import {
+  conceptQuizSchema,
+  type ConceptQuizDifficultySchema,
+  type ConceptQuizSchema,
+  type ConceptQuizSkillTagSchema,
+  type LessonPackageSchema,
+} from '@insforge/shared-schemas';
 import { z } from 'zod';
+import {
+  buildQuizGenerationMessages,
+  parseGeneratedQuizResponse,
+  type GeneratedQuizQuestion,
+} from './quiz-generation.prompts.js';
+import { QuizValidationService } from './quiz-validation.service.js';
 
 const persistedQuizQuestionOptionSchema = z.object({
   id: z.string(),
@@ -10,7 +23,11 @@ const persistedQuizQuestionOptionSchema = z.object({
 const persistedQuizQuestionSchema = z.object({
   id: z.string(),
   prompt: z.string(),
-  options: z.array(persistedQuizQuestionOptionSchema).min(2),
+  difficulty: z.enum(['core', 'medium', 'stretch']),
+  skillTag: z.enum(['definition', 'distinction', 'analogy', 'application', 'misconception']),
+  correctAnswer: z.string(),
+  explanationShort: z.string(),
+  options: z.array(persistedQuizQuestionOptionSchema).length(4),
 });
 
 const persistedQuizArtifactSchema = z.object({
@@ -19,7 +36,9 @@ const persistedQuizArtifactSchema = z.object({
   conceptId: z.string().uuid(),
   lessonVersion: z.number().int().min(1),
   status: z.enum(['active', 'submitted', 'expired']),
-  questions: z.array(persistedQuizQuestionSchema).min(1),
+  source: z.enum(['llm', 'fallback']),
+  questionCountTarget: z.number().int().min(2).max(4),
+  questions: z.array(persistedQuizQuestionSchema).min(2).max(4),
   createdAt: z.string(),
 });
 
@@ -27,40 +46,101 @@ export type PersistedQuizQuestionOption = z.infer<typeof persistedQuizQuestionOp
 export type PersistedQuizQuestion = z.infer<typeof persistedQuizQuestionSchema>;
 export type PersistedQuizArtifact = z.infer<typeof persistedQuizArtifactSchema>;
 
+interface BuildQuizForConceptInput {
+  quizId: string;
+  sessionId: string;
+  conceptId: string;
+  conceptName: string;
+  conceptDescription: string;
+  explanationSummary: string;
+  exampleOrAnalogy: string | null;
+  missingPrerequisites: string[];
+  learnerMastery: number | null;
+  difficultyTarget?: ConceptQuizDifficultySchema;
+  lessonPackage: LessonPackageSchema;
+  createdAt?: string;
+}
+
+interface QuizServiceDependencies {
+  chatService?: Pick<ChatCompletionService, 'chat'>;
+  validator?: QuizValidationService;
+}
+
 export class QuizService {
-  private static readonly FALLBACK_DISTRACTORS = [
-    'Đây là một diễn giải khác không đúng với ý chính của bài học.',
-    'Đây là chi tiết phụ, không phải đáp án đúng cho câu hỏi này.',
-    'Đây là mô tả nghe hợp lý nhưng không bám đúng lesson hiện tại.',
+  private static readonly GENERATION_MODEL = 'google/gemini-2.0-flash-lite-001';
+  private static readonly GENERIC_FALSE_STATEMENTS = [
+    'Chỉ nói về cách lưu file vào hệ thống.',
+    'Chỉ mô tả giao diện hiển thị của ứng dụng.',
+    'Không liên quan đến ý kỹ thuật của bài này.',
+    'Chỉ là tên khác của ví dụ minh họa.',
+    'Chỉ dùng để đổi màu giao diện người dùng.',
   ];
 
-  private buildQuestion(input: {
-    id: string;
-    prompt: string;
-    correctText: string;
-    distractorTexts: string[];
-  }): PersistedQuizQuestion {
-    const correctOption: PersistedQuizQuestionOption = {
-      id: `${input.id}-correct`,
-      text: input.correctText,
-      isCorrect: true,
-    };
-    const distractorPool = [...input.distractorTexts, ...QuizService.FALLBACK_DISTRACTORS];
-    const distractorOptions = [...new Set(distractorPool)]
-      .filter((text) => text.trim().length > 0 && text !== input.correctText)
-      .slice(0, 3)
-      .map((text, index) => ({
-        id: `${input.id}-d${index + 1}`,
-        text,
-        isCorrect: false,
-      }));
-    const orderedOptions = this.rotateOptions(input.id, [correctOption, ...distractorOptions]);
+  private chatService: Pick<ChatCompletionService, 'chat'>;
+  private validator: QuizValidationService;
 
-    return persistedQuizQuestionSchema.parse({
-      id: input.id,
-      prompt: input.prompt,
-      options: orderedOptions,
-    });
+  constructor(dependencies: QuizServiceDependencies = {}) {
+    this.chatService = dependencies.chatService ?? ChatCompletionService.getInstance();
+    this.validator = dependencies.validator ?? new QuizValidationService();
+  }
+
+  private normalize(value: string) {
+    return value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private uniqueTexts(values: Array<string | null | undefined>) {
+    const seen = new Set<string>();
+
+    return values
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean)
+      .filter((value) => {
+        const normalized = this.normalize(value);
+        if (!normalized || seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      });
+  }
+
+  private compactText(value: string, maxWords = 14, maxChars = 90) {
+    const normalized = value
+      .replace(/\r/g, ' ')
+      .replace(/\n+/g, ' ')
+      .replace(/\*\*/g, '')
+      .replace(/^[-*•]\s+/, '')
+      .replace(/^\d+\.\s+/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!normalized) {
+      return '';
+    }
+
+    const primaryClause =
+      normalized
+        .split(/[.!?]/)
+        .map((part) => part.trim())
+        .find(Boolean) ??
+      normalized
+        .split(/[:;,-]/)
+        .map((part) => part.trim())
+        .find(Boolean) ??
+      normalized;
+
+    const words = primaryClause.split(/\s+/).filter(Boolean);
+    const clippedWords = words.slice(0, maxWords).join(' ');
+    const clippedChars =
+      clippedWords.length > maxChars ? `${clippedWords.slice(0, maxChars - 1).trim()}…` : clippedWords;
+
+    return clippedChars.replace(/[,:;.\-–—]+$/u, '').trim();
   }
 
   private rotateOptions(
@@ -76,79 +156,336 @@ export class QuizService {
       options.length;
     const offset = rawOffset === 0 ? 1 : rawOffset;
 
-    return options.map((_, index) => options[(index + offset) % options.length]);
+    return options.map((_, index) => options[(index + offset) % options.length]!);
   }
 
-  buildQuizFromLesson(input: {
-    quizId: string;
-    sessionId: string;
-    conceptId: string;
-    conceptName: string;
+  resolveDifficultyTarget(masteryScore: number | null | undefined): ConceptQuizDifficultySchema {
+    if (masteryScore == null || masteryScore < 0.35) {
+      return 'core';
+    }
+    if (masteryScore < 0.7) {
+      return 'medium';
+    }
+    return 'stretch';
+  }
+
+  resolveQuestionCountTarget(input: {
+    learnerMastery: number | null;
+    exampleOrAnalogy: string | null;
+    missingPrerequisites: string[];
     lessonPackage: LessonPackageSchema;
-    createdAt?: string;
-  }): PersistedQuizArtifact {
-    const primaryMapping = input.lessonPackage.imageMapping[0];
-    const primaryPrerequisite = input.lessonPackage.prerequisiteMiniLessons[0];
-
-    const questions: PersistedQuizQuestion[] = [
-      this.buildQuestion({
-        id: 'lesson-feynman',
-        prompt: `Dau la loi giai thich Feynman cua bai hoc ${input.conceptName}?`,
-        correctText: input.lessonPackage.feynmanExplanation,
-        distractorTexts: [
-          input.lessonPackage.technicalTranslation,
-          input.lessonPackage.imageReadingText,
-          input.lessonPackage.metaphorImage.prompt,
-        ],
-      }),
-      this.buildQuestion({
-        id: 'lesson-technical',
-        prompt: `Dau la ban dich ky thuat cua ${input.conceptName}?`,
-        correctText: input.lessonPackage.technicalTranslation,
-        distractorTexts: [
-          input.lessonPackage.feynmanExplanation,
-          input.lessonPackage.imageReadingText,
-          input.lessonPackage.metaphorImage.prompt,
-        ],
-      }),
-    ];
-
-    if (primaryPrerequisite) {
-      questions.push(
-        this.buildQuestion({
-          id: 'lesson-prerequisite',
-          prompt: `Noi dung on lai nao thuoc prerequisite truoc khi hoc ${input.conceptName}?`,
-          correctText: `${primaryPrerequisite.title}: ${primaryPrerequisite.content}`,
-          distractorTexts: [
-            input.lessonPackage.imageReadingText,
-            input.lessonPackage.feynmanExplanation,
-            input.lessonPackage.technicalTranslation,
-          ],
-        })
-      );
-    } else if (primaryMapping) {
-      questions.push(
-        this.buildQuestion({
-          id: 'lesson-image-reading',
-          prompt: `Cau nao mo ta y nghia day hoc cua hinh anh trong bai ${input.conceptName}?`,
-          correctText: primaryMapping.teachingPurpose,
-          distractorTexts: [
-            primaryMapping.everydayMeaning,
-            primaryMapping.technicalMeaning,
-            input.lessonPackage.imageReadingText,
-          ],
-        })
-      );
+  }) {
+    if (input.missingPrerequisites.length > 0 || input.learnerMastery == null || input.learnerMastery < 0.35) {
+      return 2;
     }
 
+    const richnessScore = [
+      input.exampleOrAnalogy ? 1 : 0,
+      input.lessonPackage.imageMapping.length > 0 ? 1 : 0,
+      input.lessonPackage.prerequisiteMiniLessons.length > 0 ? 1 : 0,
+      input.learnerMastery >= 0.7 ? 1 : 0,
+    ].reduce((sum, value) => sum + value, 0);
+
+    if ((input.learnerMastery ?? 0) >= 0.7 && richnessScore >= 3) {
+      return 4;
+    }
+
+    return 3;
+  }
+
+  private toPersistedQuestion(input: GeneratedQuizQuestion, index: number): PersistedQuizQuestion {
+    const questionId = `q${index + 1}`;
+    const normalizedCorrectAnswer = this.normalize(input.correctAnswer);
+    const options = input.options.map((text, optionIndex) => ({
+      id: `${questionId}-o${optionIndex + 1}`,
+      text,
+      isCorrect: this.normalize(text) === normalizedCorrectAnswer,
+    }));
+
+    return persistedQuizQuestionSchema.parse({
+      id: questionId,
+      prompt: input.question,
+      difficulty: input.difficulty,
+      skillTag: input.skillTag,
+      correctAnswer: input.correctAnswer,
+      explanationShort: input.explanationShort,
+      options: this.rotateOptions(questionId, options),
+    });
+  }
+
+  private toPersistedArtifact(
+    input: BuildQuizForConceptInput & {
+      source: 'llm' | 'fallback';
+      questionCountTarget: number;
+      questions: GeneratedQuizQuestion[];
+    }
+  ): PersistedQuizArtifact {
     return persistedQuizArtifactSchema.parse({
       id: input.quizId,
       sessionId: input.sessionId,
       conceptId: input.conceptId,
       lessonVersion: input.lessonPackage.version,
       status: 'active',
-      questions,
+      source: input.source,
+      questionCountTarget: input.questionCountTarget,
+      questions: input.questions.map((question, index) => this.toPersistedQuestion(question, index)),
       createdAt: input.createdAt ?? new Date().toISOString(),
+    });
+  }
+
+  private async tryGenerateWithModel(
+    input: BuildQuizForConceptInput & {
+      difficultyTarget: ConceptQuizDifficultySchema;
+      questionCountTarget: number;
+    }
+  ): Promise<GeneratedQuizQuestion[] | null> {
+    let validationFeedback: string[] | undefined;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = await this.chatService.chat(
+        buildQuizGenerationMessages({
+          conceptName: input.conceptName,
+          conceptDescription: input.conceptDescription,
+          explanationSummary: input.explanationSummary,
+          exampleOrAnalogy: input.exampleOrAnalogy,
+          missingPrerequisites: input.missingPrerequisites,
+          learnerMastery: input.learnerMastery,
+          difficultyTarget: input.difficultyTarget,
+          questionCountTarget: input.questionCountTarget,
+          validationFeedback,
+        }),
+        {
+          model: QuizService.GENERATION_MODEL,
+          temperature: 0.2,
+        }
+      );
+
+      const parsed = parseGeneratedQuizResponse(result.text || '{}');
+      if (!parsed) {
+        validationFeedback = ['JSON output không hợp lệ hoặc không đúng contract.'];
+        continue;
+      }
+
+      if (parsed.questions.length !== input.questionCountTarget) {
+        validationFeedback = [
+          `Cần đúng ${input.questionCountTarget} câu hỏi, không ít hơn và không nhiều hơn.`,
+        ];
+        continue;
+      }
+
+      const validation = this.validator.validateQuizSet(parsed.questions);
+      if (validation.ok) {
+        return parsed.questions;
+      }
+
+      validationFeedback = this.validator.toFeedback(validation);
+    }
+
+    return null;
+  }
+
+  private buildDefinitionQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion {
+    const correctAnswer = this.compactText(
+      input.explanationSummary || input.lessonPackage.technicalTranslation || input.conceptDescription
+    );
+
+    return {
+      question: `Phát biểu nào mô tả đúng nhất về ${input.conceptName}?`,
+      options: [
+        correctAnswer,
+        `${input.conceptName} chỉ nói về giao diện hiển thị.`,
+        `${input.conceptName} chỉ là bước lưu dữ liệu.`,
+        `${input.conceptName} không ảnh hưởng cách hiểu hệ thống.`,
+      ],
+      correctAnswer,
+      explanationShort: `Đây là ý cốt lõi của ${input.conceptName} trong bài học hiện tại.`,
+      difficulty: 'core',
+      skillTag: 'definition',
+    };
+  }
+
+  private buildAnalogyQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion | null {
+    const primaryMapping = input.lessonPackage.imageMapping[0];
+
+    if (primaryMapping) {
+      const correctAnswer = this.compactText(primaryMapping.technicalMeaning);
+      const distractors = this.uniqueTexts([
+        this.compactText(primaryMapping.everydayMeaning),
+        this.compactText(primaryMapping.teachingPurpose),
+        'Chi tiết này chỉ để trang trí ví dụ.',
+        'Nó nói về một chủ đề khác của bài học.',
+      ])
+        .filter((item) => this.normalize(item) !== this.normalize(correctAnswer))
+        .slice(0, 3);
+
+      if (distractors.length === 3) {
+        return {
+          question: `Trong ví dụ minh họa, "${primaryMapping.visualElement}" tương ứng với ý nào?`,
+          options: [correctAnswer, ...distractors],
+          correctAnswer,
+          explanationShort: 'Câu này kiểm tra khả năng nối ví dụ trực giác với ý nghĩa kỹ thuật.',
+          difficulty: 'medium',
+          skillTag: 'analogy',
+        };
+      }
+    }
+
+    if (input.exampleOrAnalogy) {
+      const correctAnswer = this.compactText(input.explanationSummary || input.conceptDescription);
+      return {
+        question: `Ví dụ trực giác trong bài được dùng để làm rõ điều gì về ${input.conceptName}?`,
+        options: [
+          correctAnswer,
+          'Chỉ để mô tả màu sắc của ví dụ.',
+          'Chỉ để nhớ tên của tác giả bài học.',
+          'Chỉ để kéo dài phần mở bài.',
+        ],
+        correctAnswer,
+        explanationShort: 'Ví dụ trực giác chỉ là cầu nối để hiểu đúng khái niệm kỹ thuật.',
+        difficulty: 'medium',
+        skillTag: 'analogy',
+      };
+    }
+
+    return null;
+  }
+
+  private buildMisconceptionQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion {
+    const truths = this.uniqueTexts([
+      this.compactText(input.conceptDescription),
+      this.compactText(input.explanationSummary),
+      this.compactText(input.lessonPackage.technicalTranslation),
+      this.compactText(input.lessonPackage.imageMapping[0]?.technicalMeaning ?? ''),
+      `${input.conceptName} có ý nghĩa kỹ thuật riêng trong bài.`,
+      `${input.conceptName} cần được hiểu qua ý chính của concept.`,
+      `${input.conceptName} không chỉ là ví dụ đời thường.`,
+    ])
+      .filter((item) => this.normalize(item) !== this.normalize(`${input.conceptName} chỉ là tên khác của ví dụ minh họa.`))
+      .slice(0, 3);
+
+    const correctAnswer = `${input.conceptName} chỉ là tên khác của ví dụ minh họa.`;
+
+    return {
+      question: `Điều nào là hiểu sai thường gặp về ${input.conceptName}?`,
+      options: [correctAnswer, ...truths].slice(0, 4),
+      correctAnswer,
+      explanationShort: `Ví dụ minh họa chỉ hỗ trợ hiểu ${input.conceptName}, không thay thế ý kỹ thuật.`,
+      difficulty: input.learnerMastery != null && input.learnerMastery >= 0.7 ? 'stretch' : 'medium',
+      skillTag: 'misconception',
+    };
+  }
+
+  private buildPrerequisiteQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion | null {
+    const prerequisite = input.lessonPackage.prerequisiteMiniLessons[0];
+    if (!prerequisite) {
+      return null;
+    }
+
+    const correctAnswer = this.compactText(prerequisite.title);
+    const distractors = this.uniqueTexts([
+      this.compactText(input.conceptName),
+      this.compactText(input.lessonPackage.imageMapping[0]?.visualElement ?? ''),
+      this.compactText(input.lessonPackage.imageReadingText),
+      ...QuizService.GENERIC_FALSE_STATEMENTS,
+    ])
+      .filter((item) => this.normalize(item) !== this.normalize(correctAnswer))
+      .slice(0, 3);
+
+    if (distractors.length < 3) {
+      return null;
+    }
+
+    return {
+      question: `Để học chắc ${input.conceptName}, nên nối lại phần nào trước?`,
+      options: [correctAnswer, ...distractors],
+      correctAnswer,
+      explanationShort: 'Câu này kiểm tra khả năng nhận ra kiến thức nền cần có trước khi đi sâu hơn.',
+      difficulty: 'core',
+      skillTag: 'application',
+    };
+  }
+
+  private buildApplicationQuestion(input: BuildQuizForConceptInput): GeneratedQuizQuestion {
+    const correctAnswer = this.compactText(
+      input.lessonPackage.imageMapping[0]?.teachingPurpose ||
+        input.lessonPackage.technicalTranslation ||
+        input.explanationSummary
+    );
+
+    return {
+      question: `Khi áp dụng ${input.conceptName} vào bài học này, điều nào gần đúng nhất?`,
+      options: [
+        correctAnswer,
+        'Chỉ cần nhớ nguyên văn ví dụ minh họa.',
+        'Bỏ qua ý chính và tập trung vào tên gọi.',
+        'Đổi chủ đề khác là đủ để hiểu bài.',
+      ],
+      correctAnswer,
+      explanationShort: 'Câu này kiểm tra người học có hiểu vai trò thực tế của khái niệm trong bài hay không.',
+      difficulty: input.learnerMastery != null && input.learnerMastery >= 0.7 ? 'stretch' : 'medium',
+      skillTag: 'application',
+    };
+  }
+
+  private buildFallbackQuestions(
+    input: BuildQuizForConceptInput & {
+      difficultyTarget: ConceptQuizDifficultySchema;
+      questionCountTarget: number;
+    }
+  ): GeneratedQuizQuestion[] {
+    const candidates = [
+      this.buildDefinitionQuestion(input),
+      this.buildAnalogyQuestion(input),
+      this.buildMisconceptionQuestion(input),
+      this.buildPrerequisiteQuestion(input) ?? this.buildApplicationQuestion(input),
+    ].filter((question): question is GeneratedQuizQuestion => question !== null);
+
+    const selected = candidates.slice(0, input.questionCountTarget);
+    const validation = this.validator.validateQuizSet(selected);
+
+    if (validation.ok) {
+      return selected;
+    }
+
+    return [
+      this.buildDefinitionQuestion(input),
+      this.buildMisconceptionQuestion(input),
+    ];
+  }
+
+  async buildQuizForConcept(input: BuildQuizForConceptInput): Promise<PersistedQuizArtifact> {
+    const difficultyTarget = input.difficultyTarget ?? this.resolveDifficultyTarget(input.learnerMastery);
+    const questionCountTarget = this.resolveQuestionCountTarget({
+      learnerMastery: input.learnerMastery,
+      exampleOrAnalogy: input.exampleOrAnalogy,
+      missingPrerequisites: input.missingPrerequisites,
+      lessonPackage: input.lessonPackage,
+    });
+
+    const generatedQuestions = await this.tryGenerateWithModel({
+      ...input,
+      difficultyTarget,
+      questionCountTarget,
+    });
+
+    if (generatedQuestions) {
+      return this.toPersistedArtifact({
+        ...input,
+        source: 'llm',
+        questionCountTarget,
+        questions: generatedQuestions,
+      });
+    }
+
+    return this.toPersistedArtifact({
+      ...input,
+      source: 'fallback',
+      questionCountTarget,
+      questions: this.buildFallbackQuestions({
+        ...input,
+        difficultyTarget,
+        questionCountTarget,
+      }),
     });
   }
 
@@ -163,9 +500,12 @@ export class QuizService {
       sessionId: quiz.sessionId,
       conceptId: quiz.conceptId,
       status: quiz.status,
+      questionCountTarget: quiz.questionCountTarget,
       questions: quiz.questions.map((question) => ({
         id: question.id,
         prompt: question.prompt,
+        difficulty: question.difficulty,
+        skillTag: question.skillTag,
         options: question.options.map((option) => ({
           id: option.id,
           text: option.text,
@@ -201,8 +541,8 @@ export class QuizService {
       totalQuestions: questions.length,
       feedback:
         score >= 0.8
-          ? 'Bạn đang làm rất tốt. Nội dung phản hồi này được hiển thị bằng tiếng Việt.'
-          : 'Bạn nên xem lại phần giải thích và thử một bài kiểm tra mới bằng tiếng Việt.',
+          ? 'Bạn đã nắm khá chắc khái niệm này. Có thể chuyển sang bước tiếp theo.'
+          : 'Bạn nên xem lại ý cốt lõi hoặc mở giải thích thêm rồi làm lại quiz.',
     };
   }
 }

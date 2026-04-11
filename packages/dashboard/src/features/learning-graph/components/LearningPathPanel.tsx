@@ -17,8 +17,8 @@ interface LearningPathPanelProps {
 
 export function LearningPathPanel({ items, onSelect }: LearningPathPanelProps) {
   return (
-    <section className="rounded-[24px] border border-[var(--alpha-8)] bg-card p-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-      <div className="space-y-2">
+    <section className="rounded-[20px] border border-[var(--alpha-8)] bg-card/80 p-4 shadow-[0_12px_32px_rgba(15,23,42,0.05)]">
+      <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Learning path
         </p>
@@ -30,13 +30,15 @@ export function LearningPathPanel({ items, onSelect }: LearningPathPanelProps) {
             key={item.conceptId}
             type="button"
             onClick={() => onSelect(item.conceptId)}
-            className="flex items-center justify-between rounded-2xl border border-[var(--alpha-8)] bg-[var(--alpha-2)] px-3 py-3 text-left transition hover:border-emerald-500/20 hover:bg-emerald-500/[0.04]"
+            className="flex items-center justify-between gap-3 rounded-xl border border-[var(--alpha-8)] bg-[var(--alpha-2)] px-3 py-2.5 text-left transition hover:border-emerald-500/20 hover:bg-emerald-500/[0.04]"
           >
             <div className="min-w-0">
-              <p className="text-xs font-medium text-muted-foreground">Bước {index + 1}</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Bước {index + 1}
+              </p>
               <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
             </div>
-            <span className="rounded-full border border-[var(--alpha-8)] bg-white/70 px-2 py-1 text-xs text-muted-foreground">
+            <span className="shrink-0 rounded-full border border-[var(--alpha-8)] px-2 py-1 text-[11px] text-muted-foreground">
               {pathStateLabels[item.pathState]}
             </span>
           </button>

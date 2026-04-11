@@ -26,9 +26,15 @@ describe('QuizService', () => {
         {
           id: 'q1',
           prompt: 'Gradient descent la gi?',
+          difficulty: 'core',
+          skillTag: 'definition',
+          correctAnswer: 'Toi uu hoa',
+          explanationShort: 'Dap an dung.',
           options: [
             { id: 'a', text: 'Toi uu hoa', isCorrect: true },
             { id: 'b', text: 'Luu tru file', isCorrect: false },
+            { id: 'c', text: 'Dang nhap OAuth', isCorrect: false },
+            { id: 'd', text: 'Doi mau giao dien', isCorrect: false },
           ],
         },
       ],
@@ -36,6 +42,6 @@ describe('QuizService', () => {
     });
 
     expect(result.score).toBe(1);
-    expect(result.feedback).toContain('tiếng Việt');
+    expect(result.feedback).toContain('bước tiếp theo');
   });
 });

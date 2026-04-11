@@ -1,5 +1,5 @@
 import { Button } from '@insforge/ui';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ConceptExplanationCard,
@@ -68,13 +68,36 @@ export default function ConceptLearningPage() {
       })),
     [concept?.displayName, concept?.id, pathSnapshot]
   );
+  const quizSectionRef = useRef<HTMLDivElement | null>(null);
+  const [shouldScrollToQuiz, setShouldScrollToQuiz] = useState(false);
+
+  const handleRevealQuiz = async () => {
+    setShouldScrollToQuiz(true);
+    return revealQuiz();
+  };
+
+  useEffect(() => {
+    if (!shouldScrollToQuiz || !conceptLearning?.quiz) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      quizSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+      setShouldScrollToQuiz(false);
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [conceptLearning?.quiz, shouldScrollToQuiz]);
 
   const voiceTutor = useVoiceTutor({
     sessionId,
     conceptId,
     lessonVersion: conceptLearning?.lessonPackage.version,
     openingText: conceptLearning?.lessonPackage.feynmanExplanation ?? '',
-    onConfirmQuiz: revealQuiz,
+    onConfirmQuiz: handleRevealQuiz,
   });
   const voiceTutorStatus = getVoiceTutorStatusCopy({
     phase: voiceTutor.phase,
@@ -111,20 +134,15 @@ export default function ConceptLearningPage() {
       conceptName={conceptLearning.concept.displayName}
       lesson={conceptLearning.lessonPackage}
       recapSummary={conceptLearning.recap?.summary ?? null}
-      onRevealQuiz={revealQuiz}
+      onRevealQuiz={handleRevealQuiz}
       onRegenerateExplanation={generateExplanation}
       isRevealingQuiz={isRevealingQuiz}
       isRegeneratingExplanation={isGeneratingExplanation}
     />
   );
 
-  const supportRail = conceptLearning ? (
+  const studyFlowSections = conceptLearning ? (
     <div className="space-y-6">
-      <ConceptMasteryCard
-        masteryScore={conceptLearning.mastery?.masteryScore ?? 0}
-        attemptCount={conceptLearning.mastery?.attemptCount ?? 0}
-      />
-
       <ConceptExplanationCard
         explanation={explanation}
         prerequisites={conceptLearning.prerequisites.map((item) => item.displayName)}
@@ -132,16 +150,23 @@ export default function ConceptLearningPage() {
         isLoading={isGeneratingExplanation}
       />
 
-      {conceptLearning.quiz ? (
-        <ConceptQuizCard
-          quiz={conceptLearning.quiz}
-          onSubmit={submitQuiz}
-          isSubmitting={isSubmittingQuiz}
-          recapSummary={conceptLearning.recap?.summary ?? null}
-        />
-      ) : (
-        <LockedQuizState />
-      )}
+      <div ref={quizSectionRef}>
+        {conceptLearning.quiz ? (
+          <ConceptQuizCard
+            quiz={conceptLearning.quiz}
+            onSubmit={submitQuiz}
+            isSubmitting={isSubmittingQuiz}
+            recapSummary={conceptLearning.recap?.summary ?? null}
+          />
+        ) : (
+          <LockedQuizState />
+        )}
+      </div>
+
+      <ConceptMasteryCard
+        masteryScore={conceptLearning.mastery?.masteryScore ?? 0}
+        attemptCount={conceptLearning.mastery?.attemptCount ?? 0}
+      />
     </div>
   ) : null;
 
@@ -184,28 +209,20 @@ export default function ConceptLearningPage() {
       </section>
 
       <div className="space-y-6 xl:hidden">
-        <section className="space-y-4">
-          {lessonWorkspace}
-        </section>
-
-        <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="space-y-6">{learningPathPanel}</aside>
-          <aside className="space-y-6">{supportRail}</aside>
-        </div>
+        <section>{lessonWorkspace}</section>
+        <section>{studyFlowSections}</section>
+        <section>{learningPathPanel}</section>
       </div>
 
-      <div className="hidden xl:grid xl:grid-cols-[220px_minmax(0,1fr)_240px] xl:items-start xl:gap-8 2xl:grid-cols-[240px_minmax(0,1fr)_260px]">
+      <div className="hidden xl:grid xl:grid-cols-[220px_minmax(0,1fr)] xl:items-start xl:gap-8 2xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="sticky top-6 self-start">
           {learningPathPanel}
         </aside>
 
-        <main className="min-w-0">
+        <main className="min-w-0 space-y-8">
           {lessonWorkspace}
+          {studyFlowSections}
         </main>
-
-        <aside className="sticky top-6 self-start">
-          {supportRail}
-        </aside>
       </div>
 
       {!isLoadingConceptLearning && conceptLearning ? (

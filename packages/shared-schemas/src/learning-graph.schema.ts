@@ -16,6 +16,14 @@ export const sessionPathStateSchema = z.enum([
 ]);
 
 export const sessionConceptQuizStatusSchema = z.enum(['active', 'submitted', 'expired']);
+export const conceptQuizDifficultySchema = z.enum(['core', 'medium', 'stretch']);
+export const conceptQuizSkillTagSchema = z.enum([
+  'definition',
+  'distinction',
+  'analogy',
+  'application',
+  'misconception',
+]);
 
 export const learningSessionSchema = z.object({
   id: z.string().uuid(),
@@ -77,11 +85,14 @@ export const conceptQuizSchema = z.object({
   sessionId: z.string().uuid(),
   conceptId: z.string().uuid(),
   status: sessionConceptQuizStatusSchema,
+  questionCountTarget: z.number().int().min(2).max(4),
   questions: z
     .array(
       z.object({
         id: z.string(),
         prompt: z.string(),
+        difficulty: conceptQuizDifficultySchema,
+        skillTag: conceptQuizSkillTagSchema,
         options: z
           .array(
             z.object({
@@ -89,16 +100,19 @@ export const conceptQuizSchema = z.object({
               text: z.string(),
             })
           )
-          .min(2),
+          .length(4),
       })
     )
-    .min(1),
+    .min(2)
+    .max(4),
   createdAt: z.string(),
 });
 
 export type LearningSessionStatusSchema = z.infer<typeof learningSessionStatusSchema>;
 export type SessionPathStateSchema = z.infer<typeof sessionPathStateSchema>;
 export type SessionConceptQuizStatusSchema = z.infer<typeof sessionConceptQuizStatusSchema>;
+export type ConceptQuizDifficultySchema = z.infer<typeof conceptQuizDifficultySchema>;
+export type ConceptQuizSkillTagSchema = z.infer<typeof conceptQuizSkillTagSchema>;
 export type LearningSessionSchema = z.infer<typeof learningSessionSchema>;
 export type SessionPathItemSchema = z.infer<typeof sessionPathItemSchema>;
 export type SessionConceptSchema = z.infer<typeof sessionConceptSchema>;

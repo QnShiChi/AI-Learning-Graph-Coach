@@ -5,6 +5,7 @@ import { SessionService } from '@/services/learning-graph/session.service.js';
 import { GraphGenerationService } from '@/services/learning-graph/graph-generation.service.js';
 import { TutorService } from '@/services/learning-graph/tutor.service.js';
 import { VoiceTutorService } from '@/services/learning-graph/voice-tutor.service.js';
+import { ChatCompletionService } from '@/services/ai/chat-completion.service.js';
 import { ERROR_CODES } from '@/types/error-constants.js';
 import type { PoolClient } from 'pg';
 
@@ -101,22 +102,36 @@ describe('LearningOrchestratorService', () => {
         conceptId: '33333333-3333-3333-3333-333333333333',
         lessonVersion: 1,
         status: 'active',
+        source: 'llm',
+        questionCountTarget: 2,
         createdAt: new Date().toISOString(),
         questions: [
           {
             id: 'q1',
             prompt: 'Dau la loi giai thich Feynman?',
+            difficulty: 'core',
+            skillTag: 'definition',
+            correctAnswer: 'Lan truyen sai so nguoc qua cac lop',
+            explanationShort: 'Dap an dung.',
             options: [
               { id: 'a', text: 'Lan truyen sai so nguoc qua cac lop', isCorrect: true },
               { id: 'b', text: 'Tai file len storage', isCorrect: false },
+              { id: 'e', text: 'Doi mau giao dien', isCorrect: false },
+              { id: 'f', text: 'Dang nhap bang OAuth', isCorrect: false },
             ],
           },
           {
             id: 'q2',
             prompt: 'Dau la ban dich ky thuat?',
+            difficulty: 'medium',
+            skillTag: 'application',
+            correctAnswer: 'Tinh gradient de cap nhat tham so',
+            explanationShort: 'Dap an dung.',
             options: [
               { id: 'c', text: 'Tinh gradient de cap nhat tham so', isCorrect: true },
               { id: 'd', text: 'Dang nhap bang OAuth', isCorrect: false },
+              { id: 'g', text: 'Tai file len storage', isCorrect: false },
+              { id: 'h', text: 'Hien thi giao dien', isCorrect: false },
             ],
           },
         ],
@@ -322,6 +337,51 @@ describe('LearningOrchestratorService', () => {
     const insertActiveQuiz = vi
       .spyOn(SessionService.prototype, 'insertActiveQuiz')
       .mockResolvedValue(true);
+    vi.spyOn(ChatCompletionService.prototype, 'chat').mockResolvedValue({
+      text: JSON.stringify({
+        questions: [
+          {
+            question: 'Phát biểu nào mô tả đúng nhất về Backpropagation?',
+            options: [
+              'Lan truyen sai so nguoc qua cac lop',
+              'Chi la cach tai file len storage',
+              'Chi la doi mau giao dien',
+              'Chi la dang nhap bang OAuth',
+            ],
+            correct_answer: 'Lan truyen sai so nguoc qua cac lop',
+            explanation_short: 'Backpropagation day loi nguoc qua mang de tinh gradient.',
+            difficulty: 'core',
+            skill_tag: 'definition',
+          },
+          {
+            question: 'Trong vi du minh hoa, mui ten quay nguoc goi den dieu gi?',
+            options: [
+              'Sai so duoc day nguoc qua mang',
+              'Ten file cua hinh anh bai hoc',
+              'Mau sac cua giao dien toi',
+              'Toc do tai trang cua trinh duyet',
+            ],
+            correct_answer: 'Sai so duoc day nguoc qua mang',
+            explanation_short: 'Mui ten quay nguoc noi vi du voi y nghia ky thuat.',
+            difficulty: 'medium',
+            skill_tag: 'analogy',
+          },
+          {
+            question: 'Dieu nao la hieu sai ve Backpropagation?',
+            options: [
+              'Backpropagation chi la ten khac cua vi du minh hoa',
+              'Backpropagation giup tinh gradient',
+              'Backpropagation day loi nguoc qua cac lop',
+              'Backpropagation ho tro cap nhat tham so',
+            ],
+            correct_answer: 'Backpropagation chi la ten khac cua vi du minh hoa',
+            explanation_short: 'Vi du minh hoa chi ho tro hieu bai, khong thay the khai niem.',
+            difficulty: 'stretch',
+            skill_tag: 'misconception',
+          },
+        ],
+      }),
+    });
     vi.spyOn(SessionService.prototype, 'getGraph').mockResolvedValue({
       concepts: [],
       edges: [],
@@ -377,6 +437,10 @@ describe('LearningOrchestratorService', () => {
       explanation: 'Giai thich bang tieng Viet',
     });
     expect(quiz.quiz.status).toBe('active');
+    expect(quiz.quiz.questionCountTarget).toBeGreaterThanOrEqual(2);
+    expect(quiz.quiz.questionCountTarget).toBeLessThanOrEqual(4);
+    expect(quiz.quiz.questions[0]).toHaveProperty('skillTag');
+    expect(quiz.quiz.questions[0]).toHaveProperty('difficulty');
     expect(quiz.quiz.questions[0]?.options[0]).not.toHaveProperty('isCorrect');
     expect(insertActiveQuiz).toHaveBeenCalledTimes(1);
     expect(Array.isArray(graph.concepts)).toBe(true);

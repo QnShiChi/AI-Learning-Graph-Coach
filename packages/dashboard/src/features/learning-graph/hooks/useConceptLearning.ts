@@ -44,6 +44,21 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
 
   const revealQuizMutation = useMutation({
     mutationFn: () => learningGraphService.revealQuiz(sessionId!, conceptId!),
+    onSuccess: (result) => {
+      queryClient.setQueryData(
+        ['learning-graph', 'concept', sessionId, conceptId],
+        (previous: unknown) => {
+          if (!previous || typeof previous !== 'object') {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            quiz: result.quiz,
+          };
+        }
+      );
+    },
     onError: (error: Error) => {
       showToast(error.message || 'Không thể tạo bài kiểm tra lúc này', 'error');
     },
@@ -67,7 +82,7 @@ export function useConceptLearning(sessionId?: string, conceptId?: string) {
 
   useEffect(() => {
     revealQuizMutation.reset();
-  }, [conceptId, revealQuizMutation, sessionId]);
+  }, [conceptId, sessionId]);
 
   const conceptLearning = conceptQuery.data
     ? {

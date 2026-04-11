@@ -23,12 +23,12 @@ export function ConceptQuizCard({
   }, [quiz.id]);
 
   return (
-    <section className="rounded-[24px] border border-[var(--alpha-8)] bg-card p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+    <section className="rounded-[24px] border border-[var(--alpha-8)] bg-card p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)]">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Tự kiểm tra
         </p>
-        <h2 className="text-lg font-medium text-foreground">Bài kiểm tra ngắn</h2>
+        <h2 className="text-xl font-medium text-foreground">Bài kiểm tra ngắn</h2>
         <p className="text-sm leading-6 text-muted-foreground">
           Quiz chỉ xuất hiện khi bạn chủ động yêu cầu. Hãy trả lời rồi nộp để cập nhật mastery.
         </p>
@@ -45,7 +45,7 @@ export function ConceptQuizCard({
 
       <div className="mt-4 space-y-4">
         {quiz.questions.map((question, index) => (
-          <div key={question.id} className="rounded-2xl border border-[var(--alpha-8)] p-4">
+          <div key={question.id} className="rounded-[20px] border border-[var(--alpha-8)] p-4">
             <p className="text-sm font-medium text-foreground">
               Câu {index + 1}: {question.prompt}
             </p>

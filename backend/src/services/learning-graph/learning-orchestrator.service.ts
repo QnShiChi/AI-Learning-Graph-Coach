@@ -451,11 +451,19 @@ export class LearningOrchestratorService {
       });
     }
 
-    const quizArtifact = this.quizService.buildQuizFromLesson({
+    const quizArtifact = await this.quizService.buildQuizForConcept({
       quizId: crypto.randomUUID(),
       sessionId: input.sessionId,
       conceptId: input.conceptId,
       conceptName: conceptPayload.concept.displayName,
+      conceptDescription: conceptPayload.concept.description,
+      explanationSummary: lessonPackage.technicalTranslation,
+      exampleOrAnalogy: lessonPackage.feynmanExplanation,
+      missingPrerequisites: conceptPayload.prerequisites.map((item) => item.displayName),
+      learnerMastery: conceptPayload.mastery?.masteryScore ?? null,
+      difficultyTarget: this.quizService.resolveDifficultyTarget(
+        conceptPayload.mastery?.masteryScore ?? null
+      ),
       lessonPackage,
     });
 
