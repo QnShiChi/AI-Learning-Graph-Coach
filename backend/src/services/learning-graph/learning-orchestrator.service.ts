@@ -78,6 +78,29 @@ export class LearningOrchestratorService {
     return quiz;
   }
 
+  private hasLatinScript(text: string) {
+    return /\p{Script=Latin}/u.test(text);
+  }
+
+  private hasCjkScript(text: string) {
+    return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text);
+  }
+
+  private shouldPreferTranscriptFallback(serverTranscript: string, transcriptFallback: string) {
+    const normalizedServerTranscript = serverTranscript.trim();
+    const normalizedTranscriptFallback = transcriptFallback.trim();
+
+    if (!normalizedServerTranscript || !normalizedTranscriptFallback) {
+      return false;
+    }
+
+    return (
+      this.hasLatinScript(normalizedTranscriptFallback) &&
+      this.hasCjkScript(normalizedServerTranscript) &&
+      !this.hasLatinScript(normalizedServerTranscript)
+    );
+  }
+
   private async assertSessionAccess(userId: string, sessionId: string) {
     const session = await this.sessionService.findSessionByIdForUser(userId, sessionId);
     if (!session) {
@@ -543,7 +566,8 @@ export class LearningOrchestratorService {
       sessionId: input.sessionId,
       conceptId: input.conceptId,
     });
-    let learnerTranscript = input.transcriptFallback?.trim() || '';
+    const transcriptFallback = input.transcriptFallback?.trim() || '';
+    let learnerTranscript = transcriptFallback;
 
     if (input.audioInput) {
       try {
@@ -553,7 +577,19 @@ export class LearningOrchestratorService {
         });
 
         if (transcribed.trim()) {
-          learnerTranscript = transcribed.trim();
+          const normalizedTranscribed = transcribed.trim();
+
+          if (this.shouldPreferTranscriptFallback(normalizedTranscribed, transcriptFallback)) {
+            logger.warn(
+              'Voice tutor transcription script mismatched browser transcript fallback; keeping fallback',
+              {
+                sessionId: input.sessionId,
+                conceptId: input.conceptId,
+              }
+            );
+          } else {
+            learnerTranscript = normalizedTranscribed;
+          }
         }
       } catch (error) {
         logger.warn('Voice tutor transcription failed, falling back to client transcript if present', {

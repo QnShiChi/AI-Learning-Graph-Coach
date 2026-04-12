@@ -14,8 +14,42 @@ export class LessonPackageService {
   private tutorService = new TutorService();
   private conceptGroundingService = new ConceptGroundingService();
 
+  private normalize(value: string) {
+    return value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private sanitizeLessonText(value: string) {
+    return value
+      .replace(/^\s*(?:[-*•]+|\d+[.)]?|[A-Za-z][.)])\s*/u, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   private isAcademicLessonPackage(value: unknown): value is LessonPackageSchema {
     return lessonPackageSchema.safeParse(value).success;
+  }
+
+  private shouldRegenerateLessonPackage(lessonPackage: LessonPackageSchema) {
+    const cleanedImportance = this.sanitizeLessonText(lessonPackage.mainLesson.importance);
+    const malformedCorePoint = lessonPackage.mainLesson.corePoints.some((corePoint) => {
+      const cleanedCorePoint = this.sanitizeLessonText(corePoint);
+      const normalizedCorePoint = this.normalize(cleanedCorePoint);
+
+      return !normalizedCorePoint || /^\d+$/.test(normalizedCorePoint) || cleanedCorePoint.length < 18;
+    });
+
+    return (
+      !this.normalize(cleanedImportance) ||
+      /^\d+$/.test(this.normalize(cleanedImportance)) ||
+      cleanedImportance.length < 18 ||
+      malformedCorePoint
+    );
   }
 
   private resolveNextVersion(value: unknown) {
@@ -41,7 +75,10 @@ export class LessonPackageService {
       input.conceptId
     );
 
-    if (this.isAcademicLessonPackage(currentLessonPackage)) {
+    if (
+      this.isAcademicLessonPackage(currentLessonPackage) &&
+      !this.shouldRegenerateLessonPackage(currentLessonPackage)
+    ) {
       return currentLessonPackage;
     }
 

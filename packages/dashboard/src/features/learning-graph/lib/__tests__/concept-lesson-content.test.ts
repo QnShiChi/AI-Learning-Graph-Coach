@@ -15,7 +15,7 @@ describe('buildConceptLessonSections', () => {
       'Khái niệm là gì',
       'Vì sao quan trọng',
       'Thành phần / quy tắc cốt lõi',
-      'Ví dụ kỹ thuật đúng ngữ cảnh',
+      'Ví dụ minh họa đúng ngữ cảnh',
       'Lỗi hiểu sai thường gặp',
     ]);
   });

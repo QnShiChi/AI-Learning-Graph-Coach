@@ -21,6 +21,37 @@ const semanticGrounding = {
   quality: 'concept_specific' as const,
 };
 
+const supplyDemandGrounding = {
+  sourceExcerpt:
+    'Cung và cầu mô tả mối quan hệ giữa lượng hàng hóa người bán sẵn sàng cung cấp và lượng hàng hóa người mua sẵn sàng mua ở các mức giá khác nhau. Khi giá tăng, lượng cầu thường giảm nếu các yếu tố khác giữ nguyên.',
+  sourceHighlights: [
+    'Cung và cầu mô tả mối quan hệ giữa lượng hàng hóa người bán sẵn sàng cung cấp và lượng hàng hóa người mua sẵn sàng mua ở các mức giá khác nhau.',
+    'Khi giá tăng, lượng cầu thường giảm nếu các yếu tố khác giữ nguyên.',
+  ],
+  quality: 'concept_specific' as const,
+};
+
+const photosynthesisGrounding = {
+  sourceExcerpt:
+    'Quang hợp là quá trình thực vật dùng ánh sáng để tổng hợp chất hữu cơ từ nước và khí carbon dioxide. Ví dụ, đặt hai cây cùng loại vào nơi có ánh sáng và nơi thiếu ánh sáng thì cây được chiếu sáng tạo ra nhiều chất hữu cơ hơn.',
+  sourceHighlights: [
+    'Quang hợp là quá trình thực vật dùng ánh sáng để tổng hợp chất hữu cơ từ nước và khí carbon dioxide.',
+    'Ví dụ, đặt hai cây cùng loại vào nơi có ánh sáng và nơi thiếu ánh sáng thì cây được chiếu sáng tạo ra nhiều chất hữu cơ hơn.',
+  ],
+  quality: 'concept_specific' as const,
+};
+
+const dirtySemanticGrounding = {
+  sourceExcerpt:
+    '1. HTML semantic\nHTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer để mô tả đúng vai trò của từng vùng nội dung trên trang.\nViệc dùng đúng thẻ semantic giúp mã nguồn dễ đọc hơn, hỗ trợ accessibility tốt hơn và làm cho cấu trúc trang rõ ràng hơn khi bảo trì.',
+  sourceHighlights: [
+    '1',
+    'HTML semantic\nHTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+    'Việc dùng đúng thẻ semantic giúp mã nguồn dễ đọc hơn, hỗ trợ accessibility tốt hơn và làm cho cấu trúc trang rõ ràng hơn khi bảo trì.',
+  ],
+  quality: 'concept_specific' as const,
+};
+
 describe('TutorService', () => {
   it('retries when the first lesson output repeats the concept title and accepts the corrected retry', async () => {
     const chat = vi
@@ -156,6 +187,104 @@ describe('TutorService', () => {
     expect(result.mainLesson.technicalExample).toContain('<header>');
   });
 
+  it('accepts a contextual worked example for non-it concepts without requiring code or markup', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        definition:
+          'Cung và cầu là mô hình mô tả quan hệ giữa mức giá với lượng hàng hóa người bán muốn bán và người mua muốn mua.',
+        importance:
+          'Nó giúp người học giải thích vì sao giá và lượng giao dịch thay đổi khi thị trường biến động.',
+        corePoints: [
+          'Khi giá tăng, lượng cầu thường giảm nếu các yếu tố khác giữ nguyên.',
+          'Khi giá tăng, người bán có xu hướng muốn cung cấp nhiều hàng hơn.',
+        ],
+        technicalExample:
+          'Ví dụ, khi giá xoài tăng mạnh sau mùa mưa, nhiều người mua ít xoài hơn nên lượng cầu giảm dù người bán muốn bán với giá cao hơn.',
+        commonMisconceptions: [
+          'Cung và cầu không khẳng định giá luôn tăng hay luôn giảm; nó mô tả quan hệ giữa giá và lượng trong từng điều kiện cụ thể.',
+        ],
+        prerequisiteMiniLessons: [],
+      }),
+    });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'Cung và cầu',
+      conceptDescription:
+        'Mối quan hệ giữa mức giá và lượng hàng hóa được cung cấp hoặc được mua trên thị trường.',
+      grounding: supplyDemandGrounding,
+      sourceText:
+        'Cung và cầu mô tả mối quan hệ giữa lượng hàng hóa người bán sẵn sàng cung cấp và lượng hàng hóa người mua sẵn sàng mua ở các mức giá khác nhau. Khi giá tăng, lượng cầu thường giảm nếu các yếu tố khác giữ nguyên.',
+      siblingConceptNames: ['Lạm phát', 'Chi phí cơ hội'],
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(result.contentQuality).toBe('validated');
+    expect(result.mainLesson.technicalExample).toContain('giá xoài tăng mạnh');
+  });
+
+  it('retries when importance and core points collapse into numbering placeholders', async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+          importance: '1.',
+          corePoints: [
+            '1.',
+            'HTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+          ],
+          technicalExample:
+            '<main><article><h1>Bài viết</h1><section>Nội dung chính</section></article></main>',
+          commonMisconceptions: [],
+          prerequisiteMiniLessons: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+          importance:
+            'Nó giúp trình duyệt, công cụ hỗ trợ và lập trình viên hiểu cấu trúc trang rõ hơn khi đọc, bảo trì, và hỗ trợ accessibility.',
+          corePoints: [
+            'Các thẻ như header, nav, main, section, article, footer mang vai trò cấu trúc khác nhau.',
+            'Nên chọn thẻ theo nghĩa của nội dung thay vì dùng div cho mọi trường hợp.',
+          ],
+          technicalExample:
+            '<main><article><h1>Bài viết</h1><section>Nội dung chính</section></article></main>',
+          commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div sang thẻ khác cho đẹp mã.'],
+          prerequisiteMiniLessons: [],
+        }),
+      });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic',
+      conceptDescription:
+        'Cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+      grounding: semanticGrounding,
+      sourceText:
+        'HTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer. Việc dùng đúng thẻ semantic giúp accessibility và maintainability tốt hơn.',
+      siblingConceptNames: ['CSS layout và responsive design', 'JavaScript nền tảng'],
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(result.contentQuality).toBe('validated');
+    expect(result.mainLesson.importance).not.toBe('1.');
+    expect(result.mainLesson.corePoints).not.toContain('1.');
+  });
+
   it('builds an academic lesson package with structured mainLesson fields', async () => {
     const service = new TutorService({
       chatService: {
@@ -275,6 +404,53 @@ describe('TutorService', () => {
     expect(result.grounding.quality).toBe('concept_specific');
     expect(result.mainLesson.definition).toContain('Chia giao diện');
     expect(result.mainLesson.corePoints.join(' ')).not.toContain('HTML semantic');
+  });
+
+  it('sanitizes numbering fragments out of fallback lessons when grounding is dirty', async () => {
+    const chat = vi.fn().mockRejectedValue(new Error('upstream failure'));
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic',
+      conceptDescription:
+        'Cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+      grounding: dirtySemanticGrounding,
+      sourceText:
+        '1. HTML semantic\nHTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer để mô tả đúng vai trò của từng vùng nội dung trên trang.\nViệc dùng đúng thẻ semantic giúp mã nguồn dễ đọc hơn, hỗ trợ accessibility tốt hơn và làm cho cấu trúc trang rõ ràng hơn khi bảo trì.',
+      siblingConceptNames: ['CSS layout và responsive design', 'JavaScript nền tảng'],
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(result.contentQuality).toBe('fallback');
+    expect(result.mainLesson.importance).not.toBe('1.');
+    expect(result.mainLesson.corePoints).not.toContain('1.');
+    expect(result.mainLesson.corePoints[0]).toContain('HTML semantic');
+  });
+
+  it('uses an explicit source example in fallback lessons instead of a generic placeholder', async () => {
+    const chat = vi.fn().mockRejectedValue(new Error('upstream failure'));
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'Quang hợp',
+      conceptDescription:
+        'Quá trình thực vật dùng ánh sáng để tổng hợp chất hữu cơ từ nước và khí carbon dioxide.',
+      grounding: photosynthesisGrounding,
+      sourceText:
+        'Quang hợp là quá trình thực vật dùng ánh sáng để tổng hợp chất hữu cơ từ nước và khí carbon dioxide. Ví dụ, đặt hai cây cùng loại vào nơi có ánh sáng và nơi thiếu ánh sáng thì cây được chiếu sáng tạo ra nhiều chất hữu cơ hơn.',
+      siblingConceptNames: ['Hô hấp tế bào'],
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(result.contentQuality).toBe('fallback');
+    expect(result.mainLesson.technicalExample).toContain('đặt hai cây cùng loại');
+    expect(result.mainLesson.technicalExample).not.toContain('chưa được trích rõ');
   });
 
   it('builds easy explanation from lesson summary first and source text second', async () => {

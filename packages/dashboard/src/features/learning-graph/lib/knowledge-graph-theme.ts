@@ -7,6 +7,7 @@ export interface KnowledgeGraphThemeTokens {
   railBg: string;
   textPrimary: string;
   textMuted: string;
+  textOnDarkSurface: string;
   edgePrerequisite: string;
   edgeMuted: string;
   edgePath: string;
@@ -26,6 +27,7 @@ export function getKnowledgeGraphTheme(resolvedTheme: 'light' | 'dark'): Knowled
       railBg: 'rgba(255,255,255,0.88)',
       textPrimary: 'rgb(15,23,42)',
       textMuted: 'rgb(71,85,105)',
+      textOnDarkSurface: 'rgb(241,245,249)',
       edgePrerequisite: 'rgba(71,85,105,0.34)',
       edgeMuted: 'rgba(148,163,184,0.22)',
       edgePath: 'rgba(2,132,199,0.88)',
@@ -44,6 +46,7 @@ export function getKnowledgeGraphTheme(resolvedTheme: 'light' | 'dark'): Knowled
     railBg: 'rgba(15,23,42,0.86)',
     textPrimary: 'rgb(241,245,249)',
     textMuted: 'rgb(148,163,184)',
+    textOnDarkSurface: 'rgb(241,245,249)',
     edgePrerequisite: 'rgba(148,163,184,0.42)',
     edgeMuted: 'rgba(148,163,184,0.18)',
     edgePath: 'rgba(103,232,249,0.95)',

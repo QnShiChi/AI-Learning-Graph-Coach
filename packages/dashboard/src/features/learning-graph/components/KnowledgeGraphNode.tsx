@@ -58,6 +58,9 @@ export function KnowledgeGraphNode({ data }: NodeProps<KnowledgeGraphCanvasNode>
   const masteryScore = node.masteryScore ?? 0;
   const masteryAngle = Math.round(masteryScore * 360);
   const isCurrent = node.state === 'current';
+  const usesDarkSurface =
+    node.state === 'upcoming' || node.state === 'locked' || node.state === 'untracked';
+  const nodeTextColor = usesDarkSurface ? theme.textOnDarkSurface : theme.textPrimary;
 
   return (
     <div
@@ -69,7 +72,7 @@ export function KnowledgeGraphNode({ data }: NodeProps<KnowledgeGraphCanvasNode>
       )}
       style={{
         borderColor: theme.nodeBorder,
-        color: theme.textPrimary,
+        color: nodeTextColor,
       }}
     >
       <Handle

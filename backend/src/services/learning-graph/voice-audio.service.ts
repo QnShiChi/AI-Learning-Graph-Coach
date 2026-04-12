@@ -70,6 +70,7 @@ export class VoiceAudioService {
         try {
           const response = await this.getClient().audio.transcriptions.create({
             file,
+            language: 'vi',
             model,
           });
 

@@ -611,6 +611,91 @@ describe('LearningOrchestratorService', () => {
     expect(result.summaryVersion).toBe(2);
   });
 
+  it('keeps the browser transcript when server transcription comes back in a mismatched script', async () => {
+    const mockSession = {
+      id: '55555555-5555-5555-5555-555555555555',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      goal_title: 'Kinh tế học',
+      source_topic: 'Kinh tế học',
+      source_text: 'Cầu là lượng hàng hóa hoặc dịch vụ mà người tiêu dùng sẵn sàng và có khả năng mua.',
+      status: 'ready' as const,
+      current_concept_id: '66666666-6666-6666-6666-666666666666',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const mockConcept = {
+      id: '66666666-6666-6666-6666-666666666666',
+      session_id: mockSession.id,
+      canonical_name: 'demand',
+      display_name: 'Cầu',
+      description: 'Cầu là lượng hàng hóa hoặc dịch vụ mà người tiêu dùng sẵn sàng mua.',
+      difficulty: 0.2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    vi.spyOn(SessionService.prototype, 'findSessionByIdForUser').mockResolvedValue(mockSession);
+    vi.spyOn(SessionService.prototype, 'findSessionById').mockResolvedValue(mockSession);
+    vi.spyOn(SessionService.prototype, 'findConceptById').mockResolvedValue(mockConcept);
+    vi.spyOn(SessionService.prototype, 'getConceptMastery').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'listPrerequisites').mockResolvedValue([]);
+    vi.spyOn(SessionService.prototype, 'getPersistedExplanation').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue({
+      version: 1,
+      formatVersion: 2,
+      contentQuality: 'validated',
+      regenerationReason: 'initial',
+      grounding: {
+        sourceExcerpt:
+          'Cầu là lượng hàng hóa hoặc dịch vụ mà người tiêu dùng sẵn sàng và có khả năng mua.',
+        sourceHighlights: [
+          'Cầu gắn với mức giá và khả năng chi trả.',
+          'Cầu giúp giải thích hành vi người mua.',
+        ],
+        quality: 'concept_specific',
+      },
+      mainLesson: {
+        definition:
+          'Cầu là lượng hàng hóa hoặc dịch vụ mà người tiêu dùng sẵn sàng và có khả năng mua.',
+        importance: 'Giúp giải thích hành vi của người mua trên thị trường.',
+        corePoints: ['Cầu phản ánh nhu cầu có khả năng chi trả.', 'Giá tăng thường làm lượng cầu giảm.'],
+        technicalExample:
+          'Nếu giá vé xem phim tăng mạnh, nhiều sinh viên có thể giảm số lần đi xem trong tháng.',
+        commonMisconceptions: ['Cầu không chỉ là mong muốn mua; nó còn cần khả năng chi trả.'],
+      },
+      prerequisiteMiniLessons: [],
+    });
+    vi.spyOn(SessionService.prototype, 'getLatestVoiceSummary').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'insertVoiceTurn').mockResolvedValue({
+      id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      summaryVersion: 3,
+    });
+    vi.spyOn(VoiceTutorService.prototype, 'reply').mockResolvedValue({
+      replyText: 'Đúng, cầu là lượng người mua sẵn sàng và có khả năng mua ở các mức giá khác nhau.',
+      audio: null,
+      summary: 'Người học hỏi lại định nghĩa cầu.',
+    });
+    vi.spyOn(VoiceTutorService.prototype, 'transcribeLearnerAudio').mockResolvedValueOnce(
+      '解释开今公告'
+    );
+
+    const service = new LearningOrchestratorService();
+    const result = await service.createVoiceTurn({
+      userId: '11111111-1111-1111-1111-111111111111',
+      sessionId: mockSession.id,
+      conceptId: mockConcept.id,
+      lessonVersion: 1,
+      transcriptFallback: 'giải thích khái niệm cầu giúp tôi',
+      audioInput: {
+        mimeType: 'audio/webm;codecs=opus',
+        base64Audio: 'ZmFrZQ==',
+      },
+    });
+
+    expect(result.learnerTranscript).toBe('giải thích khái niệm cầu giúp tôi');
+    expect(result.summaryVersion).toBe(3);
+  });
+
   it('rejects session creation when graph generation produces no usable concepts', async () => {
     vi.spyOn(SessionService.prototype, 'createLearningSession').mockResolvedValue({
       id: '11111111-1111-1111-1111-111111111111',

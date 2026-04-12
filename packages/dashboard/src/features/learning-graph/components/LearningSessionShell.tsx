@@ -22,7 +22,7 @@ export default function LearningSessionShell() {
 
   return (
     <div className="min-h-full w-full bg-semantic-0">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-8 py-8">
+      <div className="flex w-full max-w-none flex-col gap-6 px-6 py-8 xl:px-8 2xl:px-10">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">

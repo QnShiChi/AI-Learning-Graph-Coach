@@ -96,7 +96,7 @@ export class VoiceTutorService {
               `Khái niệm là gì: ${input.lessonPackage.mainLesson.definition}`,
               `Vì sao quan trọng: ${input.lessonPackage.mainLesson.importance}`,
               `Ý cốt lõi: ${input.lessonPackage.mainLesson.corePoints.join(' | ')}`,
-              `Ví dụ kỹ thuật: ${input.lessonPackage.mainLesson.technicalExample}`,
+              `Ví dụ minh họa: ${input.lessonPackage.mainLesson.technicalExample}`,
               `Điểm dễ hiểu sai: ${input.lessonPackage.mainLesson.commonMisconceptions.join(' | ') || 'không có'}`,
               `Prerequisites liên quan: ${input.prerequisiteNames.join(', ') || 'không có'}`,
               `Tóm tắt hội thoại trước: ${input.priorSummary ?? 'chưa có'}`,

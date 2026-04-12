@@ -61,6 +61,43 @@ const makeQuizInput = () => ({
   lessonPackage,
 });
 
+const nonItLessonPackage: LessonPackageSchema = {
+  version: 1,
+  formatVersion: 2,
+  regenerationReason: 'initial',
+  mainLesson: {
+    definition:
+      'Quang hợp là quá trình thực vật dùng ánh sáng để tổng hợp chất hữu cơ từ nước và khí carbon dioxide.',
+    importance:
+      'Nó giúp giải thích cách thực vật tạo năng lượng hóa học và vì sao ánh sáng ảnh hưởng trực tiếp đến sự phát triển của cây.',
+    corePoints: [
+      'Ánh sáng cung cấp năng lượng cho quá trình quang hợp.',
+      'Nước và khí carbon dioxide là nguyên liệu đầu vào quan trọng.',
+    ],
+    technicalExample:
+      'Ví dụ, đặt hai cây cùng loại vào nơi có ánh sáng và nơi thiếu ánh sáng thì cây được chiếu sáng phát triển tốt hơn.',
+    commonMisconceptions: ['Quang hợp không diễn ra vào ban đêm khi không có ánh sáng.'],
+  },
+  prerequisiteMiniLessons: [],
+};
+
+const makeNonItQuizInput = () => ({
+  quizId: 'aaaaaaaa-1111-1111-1111-111111111111',
+  sessionId: 'bbbbbbbb-2222-2222-2222-222222222222',
+  conceptId: 'cccccccc-3333-3333-3333-333333333333',
+  conceptName: 'Quang hợp',
+  conceptDescription:
+    'Quang hợp là quá trình thực vật dùng ánh sáng để tổng hợp chất hữu cơ từ nước và khí carbon dioxide.',
+  explanationSummary:
+    'Quang hợp giúp thực vật tạo chất hữu cơ nhờ năng lượng ánh sáng, nước và khí carbon dioxide.',
+  technicalExample:
+    'Ví dụ, đặt hai cây cùng loại vào nơi có ánh sáng và nơi thiếu ánh sáng thì cây được chiếu sáng phát triển tốt hơn.',
+  missingPrerequisites: [],
+  learnerMastery: 0.2,
+  difficultyTarget: 'core' as const,
+  lessonPackage: nonItLessonPackage,
+});
+
 describe('QuizService', () => {
   it('uses llm quiz output when it passes validation', async () => {
     const service = new QuizService({
@@ -139,6 +176,35 @@ describe('QuizService', () => {
         (question) => question.options.filter((option) => option.isCorrect).length === 1
       )
     ).toBe(true);
+  });
+
+  it('keeps fallback quiz distractors domain-neutral for non-it concepts', async () => {
+    const service = new QuizService({
+      chatService: {
+        chat: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            questions: [
+              {
+                question: 'Quang hợp là gì?',
+                options: ['Cùng một ý', 'Cùng một ý', 'Cùng một ý', 'Cùng một ý'],
+                correct_answer: 'Cùng một ý',
+                explanation_short: 'Trả lời sai format',
+                difficulty: 'core',
+                skill_tag: 'definition',
+              },
+            ],
+          }),
+        }),
+      },
+    });
+
+    const artifact = await service.buildQuizForConcept(makeNonItQuizInput());
+    const allOptions = artifact.questions.flatMap((question) =>
+      question.options.map((option) => option.text)
+    );
+
+    expect(artifact.source).toBe('fallback');
+    expect(allOptions.join(' ')).not.toMatch(/storage|oauth|giao diện/i);
   });
 
   it('grades answers against the persisted quiz artifact', () => {

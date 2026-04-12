@@ -37,6 +37,32 @@ Cần hiểu JSX, component, props, state.`,
     expect(grounding.sourceHighlights.length).toBeGreaterThan(0);
   });
 
+  it('removes numbering-only fragments and title lines from semantic grounding excerpts', () => {
+    const groundingService = new ConceptGroundingService();
+
+    const grounding = groundingService.extract({
+      conceptName: 'HTML semantic',
+      conceptDescription:
+        'Cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+      siblingConceptNames: ['CSS layout và responsive design', 'JavaScript nền tảng'],
+      sourceText: `1. HTML semantic
+HTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer để mô tả đúng vai trò của từng vùng nội dung trên trang.
+Việc dùng đúng thẻ semantic giúp mã nguồn dễ đọc hơn, hỗ trợ accessibility tốt hơn và làm cho cấu trúc trang rõ ràng hơn khi bảo trì.
+
+2. CSS layout và responsive design
+CSS layout giúp sắp xếp giao diện.`,
+    });
+
+    expect(grounding.quality).toBe('concept_specific');
+    expect(grounding.sourceExcerpt).toBe(
+      'HTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer để mô tả đúng vai trò của từng vùng nội dung trên trang.\nViệc dùng đúng thẻ semantic giúp mã nguồn dễ đọc hơn, hỗ trợ accessibility tốt hơn và làm cho cấu trúc trang rõ ràng hơn khi bảo trì.'
+    );
+    expect(grounding.sourceHighlights).toEqual([
+      'HTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside và footer để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+      'Việc dùng đúng thẻ semantic giúp mã nguồn dễ đọc hơn, hỗ trợ accessibility tốt hơn và làm cho cấu trúc trang rõ ràng hơn khi bảo trì.',
+    ]);
+  });
+
   it('returns the persisted current lesson package without regenerating it', async () => {
     const persistedLessonPackage = {
       version: 1,
@@ -94,6 +120,136 @@ Cần hiểu JSX, component, props, state.`,
     );
     expect(generateLessonPackage).not.toHaveBeenCalled();
     expect(insertLessonPackage).not.toHaveBeenCalled();
+  });
+
+  it('regenerates malformed persisted lesson packages that still contain numbering placeholders', async () => {
+    const malformedLessonPackage = {
+      version: 1,
+      formatVersion: 2 as const,
+      contentQuality: 'fallback' as const,
+      regenerationReason: 'initial' as const,
+      grounding: {
+        sourceExcerpt:
+          '1. HTML semantic\nHTML semantic là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+        sourceHighlights: [
+          '1',
+          'HTML semantic là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+        ],
+        quality: 'concept_specific' as const,
+      },
+      mainLesson: {
+        definition:
+          'Cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+        importance: '1.',
+        corePoints: [
+          '1.',
+          'HTML semantic là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+        ],
+        technicalExample:
+          'Ví dụ kỹ thuật cụ thể chưa được trích rõ từ nguồn học hiện tại; cần bổ sung source text chi tiết hơn.',
+        commonMisconceptions: [],
+      },
+      prerequisiteMiniLessons: [],
+    };
+
+    const regeneratedLessonPackage = {
+      version: 2,
+      formatVersion: 2 as const,
+      contentQuality: 'validated' as const,
+      regenerationReason: 'academic_redesign' as const,
+      grounding: {
+        sourceExcerpt:
+          'HTML semantic là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+        sourceHighlights: [
+          'HTML semantic là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+          'Việc dùng đúng thẻ semantic giúp accessibility và maintainability tốt hơn.',
+        ],
+        quality: 'concept_specific' as const,
+      },
+      mainLesson: {
+        definition:
+          'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+        importance:
+          'Nó giúp trình duyệt, công cụ hỗ trợ và lập trình viên hiểu cấu trúc trang rõ hơn khi đọc, bảo trì, và hỗ trợ accessibility.',
+        corePoints: [
+          'Các thẻ như header, nav, main, section, article, footer mang vai trò cấu trúc khác nhau.',
+          'Nên chọn thẻ theo nghĩa của nội dung thay vì dùng div cho mọi trường hợp.',
+        ],
+        technicalExample:
+          '<main><article><h1>Bài viết</h1><section>Nội dung chính</section></article></main>',
+        commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div sang thẻ khác cho đẹp mã.'],
+      },
+      prerequisiteMiniLessons: [],
+    };
+
+    vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue(malformedLessonPackage);
+    vi.spyOn(SessionService.prototype, 'getGraph').mockResolvedValue({
+      concepts: [
+        {
+          id: '11111111-1111-1111-1111-111111111111',
+          sessionId: '55555555-5555-5555-5555-555555555555',
+          canonicalName: 'html-semantic',
+          displayName: 'HTML semantic',
+          description: 'Semantic HTML mô tả vai trò nội dung.',
+          difficulty: 0.2,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: '66666666-6666-6666-6666-666666666666',
+          sessionId: '55555555-5555-5555-5555-555555555555',
+          canonicalName: 'accessibility',
+          displayName: 'Accessibility cơ bản',
+          description: 'desc',
+          difficulty: 0.2,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      edges: [],
+    });
+
+    const generateLessonPackage = vi
+      .spyOn(TutorService.prototype, 'generateLessonPackage')
+      .mockResolvedValue(regeneratedLessonPackage);
+    const insertLessonPackage = vi
+      .spyOn(SessionService.prototype, 'insertLessonPackage')
+      .mockResolvedValue(true);
+
+    const service = new LessonPackageService();
+    const result = await service.getOrCreateCurrentLessonPackage({
+      sessionId: '55555555-5555-5555-5555-555555555555',
+      conceptId: '11111111-1111-1111-1111-111111111111',
+      conceptName: 'HTML semantic',
+      conceptDescription:
+        'Cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+      sourceText:
+        '1. HTML semantic\nHTML semantic là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.\nViệc dùng đúng thẻ semantic giúp accessibility và maintainability tốt hơn.',
+      masteryScore: 0,
+      prerequisites: [],
+    });
+
+    expect(generateLessonPackage).toHaveBeenCalledWith({
+      conceptName: 'HTML semantic',
+      conceptDescription:
+        'Cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+      grounding: expect.objectContaining({
+        quality: 'concept_specific',
+      }),
+      sourceText:
+        '1. HTML semantic\nHTML semantic là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.\nViệc dùng đúng thẻ semantic giúp accessibility và maintainability tốt hơn.',
+      siblingConceptNames: ['Accessibility cơ bản'],
+      masteryScore: 0,
+      missingPrerequisites: [],
+      regenerationReason: 'academic_redesign',
+      version: 2,
+    });
+    expect(insertLessonPackage).toHaveBeenCalledWith({
+      sessionId: '55555555-5555-5555-5555-555555555555',
+      conceptId: '11111111-1111-1111-1111-111111111111',
+      lessonPackage: regeneratedLessonPackage,
+    });
+    expect(result).toEqual(regeneratedLessonPackage);
   });
 
   it('generates and persists an initial lesson package when the concept has no current one', async () => {

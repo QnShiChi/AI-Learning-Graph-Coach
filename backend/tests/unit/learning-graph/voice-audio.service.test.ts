@@ -36,10 +36,12 @@ describe('VoiceAudioService', () => {
     });
     expect(create).toHaveBeenNthCalledWith(1, {
       file: 'mock-file',
+      language: 'vi',
       model: 'gpt-4o-mini-transcribe',
     });
     expect(create).toHaveBeenNthCalledWith(2, {
       file: 'mock-file',
+      language: 'vi',
       model: 'whisper-1',
     });
   });

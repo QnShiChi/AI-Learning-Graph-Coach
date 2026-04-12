@@ -27,7 +27,7 @@ export function buildConceptLessonSections(
       bullets: compact(mainLesson.corePoints),
     },
     {
-      title: 'Ví dụ kỹ thuật đúng ngữ cảnh',
+      title: 'Ví dụ minh họa đúng ngữ cảnh',
       paragraphs: compact([mainLesson.technicalExample]),
     },
     {

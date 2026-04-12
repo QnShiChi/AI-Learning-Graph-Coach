@@ -53,8 +53,96 @@ export class TutorService {
       .trim();
   }
 
+  private stripListMarker(value: string) {
+    return value
+      .replace(/^\s*(?:[-*•]+|\d+[.)]?|[A-Za-z][.)])\s*/u, '')
+      .trim();
+  }
+
+  private sanitizeSectionText(value: string) {
+    return this.stripListMarker(value).replace(/\s+/g, ' ').trim();
+  }
+
+  private hasMinimumContent(value: string, minWordCount = 5, minLength = 24) {
+    const sanitized = this.sanitizeSectionText(value);
+    const normalized = this.normalize(sanitized);
+
+    if (!normalized || /^\d+$/.test(normalized)) {
+      return false;
+    }
+
+    return sanitized.length >= minLength && normalized.split(' ').filter(Boolean).length >= minWordCount;
+  }
+
+  private looksLikeCodeOrMarkup(value: string) {
+    return (
+      /[<>{}=()[\]]/.test(value) ||
+      /\b(const|let|function|return|class|async|await|fetch|SELECT|INSERT|UPDATE|DELETE)\b/i.test(
+        value
+      )
+    );
+  }
+
+  private hasExampleCue(value: string) {
+    const normalized = this.normalize(value);
+    return /\b(vi du|chang han|gia su|truong hop|thi nghiem|tinh huong|case study|khi|neu)\b/u.test(
+      normalized
+    );
+  }
+
+  private isGenericExamplePlaceholder(value: string) {
+    const normalized = this.normalize(value);
+    return (
+      normalized.includes('chua duoc trich ro') ||
+      normalized.includes('can bo sung source text chi tiet hon')
+    );
+  }
+
+  private isPseudoExample(value: string) {
+    const normalized = this.normalize(value);
+    return /^(hieu vai tro cua|biet cach|la cach|la viec|giup hieu|de hieu)/.test(normalized);
+  }
+
+  private isContextualExampleCandidate(value: string) {
+    const sanitized = this.sanitizeSectionText(value);
+
+    if (
+      !this.hasMinimumContent(sanitized, 6, 28) ||
+      this.isGenericExamplePlaceholder(sanitized) ||
+      this.isPseudoExample(sanitized)
+    ) {
+      return false;
+    }
+
+    if (this.looksLikeCodeOrMarkup(sanitized)) {
+      return true;
+    }
+
+    return this.hasExampleCue(sanitized);
+  }
+
+  private selectContextualExample(input: {
+    grounding: LessonGrounding;
+    sourceText: string;
+    siblingConceptNames: string[];
+  }) {
+    const candidates = this.collectMeaningfulLines(
+      [
+        input.grounding.sourceExcerpt,
+        ...input.grounding.sourceHighlights,
+        ...input.sourceText
+          .split(/\r?\n/)
+          .flatMap((line) => line.split(/(?<=[.!?…])\s+/)),
+      ],
+      input.siblingConceptNames,
+      12
+    );
+
+    return candidates.find((candidate) => this.isContextualExampleCandidate(candidate)) ?? '';
+  }
+
   private toSentence(value: string) {
-    const normalized = value.replace(/\s+/g, ' ').trim();
+    const normalized = this.sanitizeSectionText(value);
 
     if (!normalized) {
       return '';
@@ -67,8 +155,9 @@ export class TutorService {
     const bulletMatches = sourceText
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => /^[-*•]\s+/.test(line) || /^\d+\.\s+/.test(line))
-      .map((line) => line.replace(/^([-*•]|\d+\.)\s+/, '').trim())
+      .filter((line) => /^[-*•]\s+/.test(line) || /^\d+[.)]?\s+/.test(line))
+      .map((line) => this.sanitizeSectionText(line))
+      .filter((line) => this.hasMinimumContent(line, 4, 18))
       .filter(Boolean);
 
     const highlights = bulletMatches.length
@@ -76,8 +165,8 @@ export class TutorService {
       : sourceText
           .split(/\r?\n/)
           .flatMap((line) => line.split(/[.!?]\s+/))
-          .map((line) => line.trim())
-          .filter((line) => line.length > 20 && !line.endsWith(':'));
+          .map((line) => this.sanitizeSectionText(line))
+          .filter((line) => this.hasMinimumContent(line, 5, 24) && !line.endsWith(':'));
 
     return highlights.slice(0, maxItems);
   }
@@ -141,6 +230,21 @@ export class TutorService {
         normalizedValue.includes(this.normalize(name))
       );
     });
+  }
+
+  private collectMeaningfulLines(
+    values: string[],
+    siblingConceptNames: string[],
+    maxItems = values.length
+  ) {
+    return this.dedupeLines(
+      this.filterSiblingConceptBleed(
+        values
+          .map((value) => this.sanitizeSectionText(value))
+          .filter((value) => this.hasMinimumContent(value, 4, 18)),
+        siblingConceptNames
+      )
+    ).slice(0, maxItems);
   }
 
   private extractKeywords(values: string[]) {
@@ -222,10 +326,11 @@ export class TutorService {
       input.validationFeedback.length > 0
         ? `\nLần sinh trước bị từ chối vì:\n- ${input.validationFeedback.join('\n- ')}\nHãy sửa đúng các lỗi trên.`
         : '';
-    const groundingHighlights =
-      input.grounding.sourceHighlights.length > 0
-        ? input.grounding.sourceHighlights.map((item) => `- ${item}`).join('\n')
-        : '- không có';
+    const groundingHighlights = this.collectMeaningfulLines(
+      input.grounding.sourceHighlights,
+      input.siblingConceptNames,
+      5
+    );
     const siblingConceptBlock =
       input.siblingConceptNames.length > 0
         ? input.siblingConceptNames.map((item) => `- ${item}`).join('\n')
@@ -241,7 +346,7 @@ Grounding chính cho khái niệm này:
 ${input.grounding.sourceExcerpt}
 
 Các highlight đã được trích riêng cho khái niệm:
-${groundingHighlights}
+${groundingHighlights.length > 0 ? groundingHighlights.map((item) => `- ${item}`).join('\n') : '- không có'}
 
 Nguồn toàn session chỉ dùng làm tham khảo phụ khi grounding còn thiếu:
 ${input.sourceText}
@@ -255,9 +360,9 @@ ${prerequisiteBlock}
 Yêu cầu bắt buộc:
 - Trả về JSON hợp lệ với các key: definition, importance, corePoints, technicalExample, commonMisconceptions, prerequisiteMiniLessons
 - definition phải giải thích khái niệm là gì, không được chỉ lặp lại title
-- importance phải trả lời vì sao người học cần hiểu khái niệm này
-- corePoints phải có ít nhất 2 ý khác nhau
-- technicalExample phải là ví dụ kỹ thuật cụ thể, có code, markup, pattern, hoặc tình huống kỹ thuật rõ ràng
+- importance phải trả lời vì sao người học cần hiểu khái niệm này bằng ít nhất một câu đầy đủ, không được trả về fragment ngắn kiểu "1." hoặc chỉ lặp heading
+- corePoints phải có ít nhất 2 ý khác nhau, mỗi ý là một câu hoàn chỉnh có nội dung học tập rõ ràng chứ không phải numbering, title, hay fragment cụt
+- technicalExample phải là ví dụ cụ thể bám theo ngữ cảnh của concept; có thể là code, markup, tình huống thực tế, thí nghiệm, case study, hoặc worked example rõ ràng
 - commonMisconceptions chỉ gồm các hiểu sai có thể xảy ra thật sự
 - Tập trung vào grounding của chính concept này; không lặp lại ý chính của các concept khác trong session
 - Không dùng analogy mặc định, không giải thích theo kiểu Feynman, không viết giọng chatbot
@@ -275,11 +380,21 @@ ${feedbackBlock}`,
   }) {
     const failures: string[] = [];
     const normalizedConceptName = this.normalize(input.conceptName);
-    const normalizedDefinition = this.normalize(input.lesson.definition);
-    const normalizedImportance = this.normalize(input.lesson.importance);
-    const normalizedMisconceptions = input.lesson.commonMisconceptions.map((item) =>
-      this.normalize(item)
+    const cleanedDefinition = this.sanitizeSectionText(input.lesson.definition);
+    const cleanedImportance = this.sanitizeSectionText(input.lesson.importance);
+    const cleanedCorePoints = this.dedupeLines(
+      input.lesson.corePoints
+        .map((item) => this.sanitizeSectionText(item))
+        .filter(Boolean)
     );
+    const substantiveCorePoints = cleanedCorePoints.filter((item) =>
+      this.hasMinimumContent(item, 4, 18)
+    );
+    const normalizedDefinition = this.normalize(cleanedDefinition);
+    const normalizedImportance = this.normalize(cleanedImportance);
+    const normalizedMisconceptions = input.lesson.commonMisconceptions
+      .map((item) => this.sanitizeSectionText(item))
+      .map((item) => this.normalize(item));
 
     if (!normalizedDefinition || normalizedDefinition === normalizedConceptName) {
       failures.push('definition is too close to concept title');
@@ -291,30 +406,33 @@ ${feedbackBlock}`,
       failures.push('definition is too short to explain the concept');
     }
 
-    if (!normalizedImportance || normalizedImportance === normalizedDefinition) {
+    if (
+      !normalizedImportance ||
+      normalizedImportance === normalizedDefinition ||
+      !this.hasMinimumContent(cleanedImportance, 5, 24)
+    ) {
       failures.push('importance does not explain practical or learning value');
     }
 
-    const uniqueCorePoints = this.dedupeLines(input.lesson.corePoints);
-    if (uniqueCorePoints.length < 2) {
-      failures.push('corePoints must contain at least two distinct ideas');
+    if (substantiveCorePoints.length < 2) {
+      failures.push('corePoints must contain at least two distinct substantive ideas');
     }
 
-    const normalizedTechnicalExample = this.normalize(input.lesson.technicalExample);
-    const looksLikeCodeOrMarkup =
-      /[<>{}=()[\];]/.test(input.lesson.technicalExample) ||
-      /\b(const|let|function|return|class|async|await|fetch|SELECT|INSERT|UPDATE|DELETE)\b/i.test(
-        input.lesson.technicalExample
-      );
-    const looksLikePseudoExample = /^hieu vai tro cua|^hiểu vai trò của|^biet cach|^biết cách/i.test(
-      normalizedTechnicalExample
-    );
-    const mentionsConcreteUiPattern =
-      /\b(header|main|section|article|nav|footer)\b/i.test(input.lesson.technicalExample) &&
-      /<\s*(header|main|section|article|nav|footer)/i.test(input.lesson.technicalExample);
+    const cleanedTechnicalExample = this.sanitizeSectionText(input.lesson.technicalExample);
+    const normalizedTechnicalExample = this.normalize(cleanedTechnicalExample);
+    const looksLikeCodeOrMarkup = this.looksLikeCodeOrMarkup(cleanedTechnicalExample);
+    const exampleOverlapCount = this.groundingOverlapCount({
+      text: cleanedTechnicalExample,
+      grounding: input.grounding,
+    });
+    const mentionsConcept = normalizedTechnicalExample.includes(normalizedConceptName);
 
-    if ((!looksLikeCodeOrMarkup && !mentionsConcreteUiPattern) || looksLikePseudoExample) {
-      failures.push('technicalExample is descriptive but not an example');
+    if (
+      this.isGenericExamplePlaceholder(cleanedTechnicalExample) ||
+      !this.isContextualExampleCandidate(cleanedTechnicalExample) ||
+      (!looksLikeCodeOrMarkup && exampleOverlapCount < 1 && !mentionsConcept)
+    ) {
+      failures.push('technicalExample does not provide a concrete contextual example');
     }
 
     if (
@@ -330,11 +448,11 @@ ${feedbackBlock}`,
     }
 
     const lessonBody = [
-      input.lesson.definition,
-      input.lesson.importance,
-      ...input.lesson.corePoints,
+      cleanedDefinition,
+      cleanedImportance,
+      ...substantiveCorePoints,
       input.lesson.technicalExample,
-      ...input.lesson.commonMisconceptions,
+      ...input.lesson.commonMisconceptions.map((item) => this.sanitizeSectionText(item)),
     ].join(' ');
     const siblingMentions = input.siblingConceptNames.filter((name) =>
       this.normalize(lessonBody).includes(this.normalize(name))
@@ -371,18 +489,23 @@ ${feedbackBlock}`,
         `${input.conceptName} là một phần kiến thức quan trọng trong phiên học hiện tại.`
     );
     const primarySource = input.grounding.sourceExcerpt.trim() || input.sourceText;
-    const sourceHighlights = this.filterSiblingConceptBleed(
-      (
-        input.grounding.sourceHighlights.length > 0
-          ? input.grounding.sourceHighlights
-          : this.extractSourceHighlights(primarySource, 5)
-      ).map((item) => this.toSentence(item)),
-      input.siblingConceptNames
-    );
+    const sourceHighlights = this.collectMeaningfulLines(
+      [
+        ...input.grounding.sourceHighlights,
+        ...this.extractSourceHighlights(primarySource, 5),
+      ],
+      input.siblingConceptNames,
+      5
+    ).map((item) => this.toSentence(item));
     const uniqueCorePoints = this.dedupeLines(sourceHighlights).slice(0, 3);
     const importance =
       uniqueCorePoints[0] ??
       `Hiểu ${input.conceptName} giúp bạn đọc đúng cấu trúc, giải thích đúng cơ chế, và áp dụng kiến thức nhất quán hơn.`;
+    const contextualExample = this.selectContextualExample({
+      grounding: input.grounding,
+      sourceText: input.sourceText,
+      siblingConceptNames: input.siblingConceptNames,
+    });
 
     return {
       definition: descriptionSentence,
@@ -392,10 +515,12 @@ ${feedbackBlock}`,
           ? uniqueCorePoints
           : [
               descriptionSentence,
-              `Nội dung nguồn hiện tại nhấn mạnh rằng ${input.conceptName} cần được hiểu đúng theo ngữ cảnh kỹ thuật.`,
+              `Nội dung nguồn hiện tại nhấn mạnh rằng ${input.conceptName} cần được hiểu đúng theo ngữ cảnh học tập hiện tại.`,
             ],
       technicalExample:
-        'Ví dụ kỹ thuật cụ thể chưa được trích rõ từ nguồn học hiện tại; cần bổ sung source text chi tiết hơn.',
+        contextualExample
+          ? this.toSentence(contextualExample)
+          : 'Ví dụ cụ thể theo ngữ cảnh chưa được trích rõ từ nguồn học hiện tại; cần bổ sung source text chi tiết hơn.',
       commonMisconceptions: [],
     };
   }
@@ -437,10 +562,16 @@ ${feedbackBlock}`,
             lesson: {
               definition: this.toSentence(parsed.definition),
               importance: this.toSentence(parsed.importance),
-              corePoints: this.dedupeLines(parsed.corePoints.map((item) => this.toSentence(item))),
+              corePoints: this.dedupeLines(
+                parsed.corePoints
+                  .map((item) => this.toSentence(item))
+                  .filter((item) => this.hasMinimumContent(item, 4, 18))
+              ),
               technicalExample: parsed.technicalExample.trim(),
               commonMisconceptions: this.dedupeLines(
-                parsed.commonMisconceptions.map((item) => this.toSentence(item))
+                parsed.commonMisconceptions
+                  .map((item) => this.toSentence(item))
+                  .filter((item) => this.hasMinimumContent(item, 4, 18))
               ),
             },
             prerequisiteMiniLessons: parsed.prerequisiteMiniLessons,

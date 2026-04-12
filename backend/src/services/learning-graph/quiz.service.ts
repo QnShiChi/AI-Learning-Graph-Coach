@@ -69,11 +69,11 @@ interface QuizServiceDependencies {
 export class QuizService {
   private static readonly GENERATION_MODEL = 'google/gemini-2.0-flash-lite-001';
   private static readonly GENERIC_FALSE_STATEMENTS = [
-    'Chỉ nói về cách lưu file vào hệ thống.',
-    'Chỉ mô tả giao diện hiển thị của ứng dụng.',
-    'Không liên quan đến ý kỹ thuật của bài này.',
+    'Chỉ lặp lại tên của khái niệm mà không có ý nghĩa riêng.',
+    'Không liên quan đến ý chính của bài học này.',
+    'Không giúp giải thích vấn đề đang học.',
     'Chỉ là tên khác của ví dụ minh họa.',
-    'Chỉ dùng để đổi màu giao diện người dùng.',
+    'Chỉ là một chi tiết rời rạc không ảnh hưởng cách hiểu bài.',
   ];
 
   private chatService: Pick<ChatCompletionService, 'chat'>;
@@ -293,9 +293,9 @@ export class QuizService {
       question: `Phát biểu nào mô tả đúng nhất về ${input.conceptName}?`,
       options: [
         correctAnswer,
-        `${input.conceptName} chỉ nói về giao diện hiển thị.`,
-        `${input.conceptName} chỉ là bước lưu dữ liệu.`,
-        `${input.conceptName} không ảnh hưởng cách hiểu hệ thống.`,
+        `${input.conceptName} chỉ lặp lại tên gọi mà không có ý nghĩa riêng.`,
+        `${input.conceptName} chỉ là một chi tiết rời rạc không ảnh hưởng cách hiểu bài.`,
+        `${input.conceptName} không liên quan đến vấn đề đang học.`,
       ],
       correctAnswer,
       explanationShort: `Đây là ý cốt lõi của ${input.conceptName} trong bài học hiện tại.`,
@@ -310,7 +310,7 @@ export class QuizService {
       this.compactText(input.explanationSummary),
       this.compactText(input.lessonPackage.mainLesson.definition),
       ...input.lessonPackage.mainLesson.commonMisconceptions.map((item) => this.compactText(item)),
-      `${input.conceptName} có ý nghĩa kỹ thuật riêng trong bài.`,
+      `${input.conceptName} có ý nghĩa riêng trong bài.`,
       `${input.conceptName} cần được hiểu qua ý chính của concept.`,
       `${input.conceptName} không nên bị hiểu như một mẹo ghi nhớ rời rạc.`,
     ])
@@ -323,7 +323,7 @@ export class QuizService {
       question: `Điều nào là hiểu sai thường gặp về ${input.conceptName}?`,
       options: [correctAnswer, ...truths].slice(0, 4),
       correctAnswer,
-      explanationShort: `Ví dụ minh họa chỉ hỗ trợ hiểu ${input.conceptName}, không thay thế ý kỹ thuật.`,
+      explanationShort: `Ví dụ minh họa chỉ hỗ trợ hiểu ${input.conceptName}, không thay thế ý chính của bài.`,
       difficulty: input.learnerMastery != null && input.learnerMastery >= 0.7 ? 'stretch' : 'medium',
       skillTag: 'misconception',
     };
