@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ConceptGroundingService } from '@/services/learning-graph/concept-grounding.service.js';
 import { LessonPackageService } from '@/services/learning-graph/lesson-package.service.js';
 import { SessionService } from '@/services/learning-graph/session.service.js';
 import { TutorService } from '@/services/learning-graph/tutor.service.js';
@@ -8,12 +9,47 @@ describe('LessonPackageService', () => {
     vi.restoreAllMocks();
   });
 
+  it('extracts concept-specific grounding for component organization instead of using the full session outline', () => {
+    const groundingService = new ConceptGroundingService();
+
+    const grounding = groundingService.extract({
+      conceptName: 'Tổ chức giao diện thành component',
+      conceptDescription: 'Chia giao diện thành các phần nhỏ có trách nhiệm rõ ràng.',
+      siblingConceptNames: [
+        'HTML semantic và cấu trúc trang',
+        'CSS layout và responsive design',
+        'JavaScript nền tảng',
+      ],
+      sourceText: `1. HTML semantic và cấu trúc trang
+HTML semantic là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside, footer.
+
+4. Tổ chức giao diện thành component
+Giao diện nên được chia thành các phần nhỏ có trách nhiệm rõ ràng.
+Mỗi component nên đại diện cho một phần UI độc lập như button, form, card, modal, navbar hoặc task item.
+
+5. React cơ bản
+Cần hiểu JSX, component, props, state.`,
+    });
+
+    expect(grounding.quality).toBe('concept_specific');
+    expect(grounding.sourceExcerpt).toContain('Giao diện nên được chia thành các phần nhỏ');
+    expect(grounding.sourceExcerpt).not.toContain('HTML semantic là cách dùng các thẻ');
+    expect(grounding.sourceHighlights.length).toBeGreaterThan(0);
+  });
+
   it('returns the persisted current lesson package without regenerating it', async () => {
     const persistedLessonPackage = {
       version: 1,
       formatVersion: 2 as const,
       contentQuality: 'validated' as const,
       regenerationReason: 'initial' as const,
+      grounding: {
+        sourceExcerpt: 'Backpropagation là quá trình lan truyền sai số từ output về các tầng trước đó.',
+        sourceHighlights: [
+          'Backpropagation là quá trình lan truyền sai số từ output về các tầng trước đó.',
+        ],
+        quality: 'concept_specific' as const,
+      },
       mainLesson: {
         definition: 'Backpropagation là quá trình lan truyền sai số từ output về các tầng trước đó.',
         importance: 'Nó cho phép mạng nơ-ron tính gradient để cập nhật trọng số.',
@@ -68,6 +104,14 @@ describe('LessonPackageService', () => {
       formatVersion: 2 as const,
       contentQuality: 'validated' as const,
       regenerationReason: 'initial' as const,
+      grounding: {
+        sourceExcerpt:
+          'Backpropagation là quá trình lan truyền sai số ngược qua các tầng để tính gradient.',
+        sourceHighlights: [
+          'Backpropagation là quá trình lan truyền sai số ngược qua các tầng để tính gradient.',
+        ],
+        quality: 'concept_specific' as const,
+      },
       mainLesson: {
         definition:
           'Backpropagation là quá trình lan truyền sai số ngược qua các tầng để tính gradient.',
@@ -144,6 +188,14 @@ describe('LessonPackageService', () => {
       formatVersion: 2 as const,
       contentQuality: 'validated' as const,
       regenerationReason: 'initial' as const,
+      grounding: {
+        sourceExcerpt:
+          'Gradient descent cập nhật tham số theo hướng làm loss giảm dần qua nhiều lần lặp.',
+        sourceHighlights: [
+          'Gradient descent cập nhật tham số theo hướng làm loss giảm dần qua nhiều lần lặp.',
+        ],
+        quality: 'concept_specific' as const,
+      },
       mainLesson: {
         definition:
           'Gradient descent cập nhật tham số theo hướng làm loss giảm dần qua nhiều lần lặp.',
@@ -199,6 +251,11 @@ describe('LessonPackageService', () => {
       formatVersion: 2 as const,
       contentQuality: 'validated' as const,
       regenerationReason: 'academic_redesign' as const,
+      grounding: {
+        sourceExcerpt: 'Semantic HTML dùng thẻ có ý nghĩa để mô tả cấu trúc nội dung.',
+        sourceHighlights: ['Semantic HTML dùng thẻ có ý nghĩa để mô tả cấu trúc nội dung.'],
+        quality: 'concept_specific' as const,
+      },
       mainLesson: {
         definition: 'Semantic HTML dùng thẻ có ý nghĩa để mô tả cấu trúc nội dung.',
         importance: 'Cấu trúc đúng giúp accessibility và maintainability tốt hơn.',
