@@ -330,7 +330,7 @@ describe('LearningOrchestratorService', () => {
       .mockResolvedValue(undefined);
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue(null);
     vi.spyOn(SessionService.prototype, 'insertLessonPackage').mockResolvedValue(true);
-    vi.spyOn(TutorService.prototype, 'generateExplanation').mockResolvedValue(
+    const generateExplanation = vi.spyOn(TutorService.prototype, 'generateExplanation').mockResolvedValue(
       'Giai thich bang tieng Viet'
     );
     vi.spyOn(SessionService.prototype, 'getActiveQuiz').mockResolvedValue(null);
@@ -411,6 +411,7 @@ describe('LearningOrchestratorService', () => {
     expect(conceptLearning.lessonPackage).toMatchObject({
       version: 1,
       formatVersion: 2,
+      contentQuality: expect.stringMatching(/validated|fallback/),
       regenerationReason: 'initial',
       mainLesson: {
         definition: expect.any(String),
@@ -428,6 +429,13 @@ describe('LearningOrchestratorService', () => {
       sessionId: '55555555-5555-5555-5555-555555555555',
       conceptId: '66666666-6666-6666-6666-666666666666',
       explanation: 'Giai thich bang tieng Viet',
+    });
+    expect(generateExplanation).toHaveBeenCalledWith({
+      conceptName: 'Backpropagation',
+      lessonSummary: expect.any(String),
+      sourceText: 'Backpropagation lan truyền lỗi từ output về hidden layers.',
+      masteryScore: 0.2,
+      missingPrerequisites: [],
     });
     expect(quiz.quiz.status).toBe('active');
     expect(quiz.quiz.questionCountTarget).toBeGreaterThanOrEqual(2);
@@ -471,6 +479,7 @@ describe('LearningOrchestratorService', () => {
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue({
       version: 1,
       formatVersion: 2,
+      contentQuality: 'validated',
       regenerationReason: 'initial',
       mainLesson: {
         definition: 'OOP tổ chức chương trình quanh object và class.',
@@ -543,6 +552,7 @@ describe('LearningOrchestratorService', () => {
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue({
       version: 1,
       formatVersion: 2,
+      contentQuality: 'validated',
       regenerationReason: 'initial',
       mainLesson: {
         definition: 'OOP tổ chức chương trình quanh object và class.',

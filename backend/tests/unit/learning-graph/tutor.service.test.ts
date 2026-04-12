@@ -173,6 +173,38 @@ describe('TutorService', () => {
     expect(result.mainLesson.commonMisconceptions.length).toBeGreaterThan(0);
   });
 
+  it('builds easy explanation from lesson summary first and source text second', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      text: 'Semantic HTML giúp người học hiểu vì sao mỗi vùng nội dung nên dùng đúng thẻ thay vì div chung chung.',
+    });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    await service.generateExplanation({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      lessonSummary:
+        'Semantic HTML dùng thẻ có ý nghĩa để mô tả cấu trúc. Điều này giúp accessibility và maintainability tốt hơn.',
+      sourceText:
+        'header, nav, main, article, section, footer là các thẻ semantic phổ biến trong layout trang.',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: expect.stringContaining('Nguồn chính: Semantic HTML dùng thẻ có ý nghĩa'),
+        }),
+        expect.objectContaining({
+          content: expect.stringContaining('Nguồn phụ: header, nav, main, article'),
+        }),
+      ]),
+      expect.any(Object)
+    );
+  });
+
   it('cleans generated explanations so they read like teaching content instead of chatbot copy', async () => {
     const service = new TutorService();
     Object.defineProperty(service, 'chatService', {

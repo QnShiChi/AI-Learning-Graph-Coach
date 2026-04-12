@@ -429,7 +429,8 @@ export class LearningOrchestratorService {
 
     const explanation = await this.tutorService.generateExplanation({
       conceptName: payload.concept?.displayName ?? 'Khái niệm hiện tại',
-      conceptDescription: this.buildLessonSummary(lessonPackage),
+      lessonSummary: this.buildLessonSummary(lessonPackage),
+      sourceText: payload.session?.sourceText ?? null,
       masteryScore: payload.mastery?.masteryScore ?? 0,
       missingPrerequisites: payload.prerequisites.map((item) => item.displayName),
     });
