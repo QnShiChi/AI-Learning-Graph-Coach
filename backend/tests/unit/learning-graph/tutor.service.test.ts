@@ -78,8 +78,79 @@ describe('TutorService', () => {
     expect(result.mainLesson.technicalExample).toContain('chưa được trích rõ');
   });
 
+  it('rejects descriptive technicalExample text that is not a concrete example', async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả vai trò của từng phần nội dung.',
+          importance:
+            'Nó giúp trình duyệt và công cụ hỗ trợ hiểu cấu trúc trang tốt hơn.',
+          corePoints: [
+            'header, main, article, section, footer mang vai trò khác nhau.',
+            'Nên chọn thẻ theo nghĩa nội dung thay vì dùng div cho mọi thứ.',
+          ],
+          technicalExample:
+            'Hiểu vai trò của các thẻ như header, main, section, article, nav, footer.',
+          commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div.'],
+          prerequisiteMiniLessons: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả vai trò của từng phần nội dung.',
+          importance:
+            'Nó giúp trình duyệt và công cụ hỗ trợ hiểu cấu trúc trang tốt hơn.',
+          corePoints: [
+            'header, main, article, section, footer mang vai trò khác nhau.',
+            'Nên chọn thẻ theo nghĩa nội dung thay vì dùng div cho mọi thứ.',
+          ],
+          technicalExample:
+            '<header>...menu...</header><main><article><h1>Bài viết</h1></article></main>',
+          commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div.'],
+          prerequisiteMiniLessons: [],
+        }),
+      });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(result.mainLesson.technicalExample).toContain('<header>');
+  });
+
   it('builds an academic lesson package with structured mainLesson fields', async () => {
-    const service = new TutorService();
+    const service = new TutorService({
+      chatService: {
+        chat: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            definition:
+              'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng phần nội dung trên trang.',
+            importance:
+              'Nó giúp trình duyệt, công cụ hỗ trợ và lập trình viên hiểu cấu trúc trang rõ hơn khi đọc, bảo trì, và hỗ trợ accessibility.',
+            corePoints: [
+              'Các thẻ như header, nav, main, section, article, footer mang vai trò cấu trúc khác nhau.',
+              'Nên chọn thẻ theo nghĩa của nội dung thay vì dùng div cho mọi trường hợp.',
+            ],
+            technicalExample:
+              '<main><article><h1>Bài viết</h1><section>Nội dung chính</section></article></main>',
+            commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div sang thẻ khác cho đẹp mã.'],
+            prerequisiteMiniLessons: [],
+          }),
+        }),
+      } as never,
+    });
 
     const result = await service.generateLessonPackage({
       conceptName: 'HTML semantic và cấu trúc trang',
@@ -98,7 +169,7 @@ describe('TutorService', () => {
     expect(result.mainLesson.definition.toLowerCase()).toContain('semantic');
     expect(result.mainLesson.importance.length).toBeGreaterThan(0);
     expect(result.mainLesson.corePoints.length).toBeGreaterThan(0);
-    expect(result.mainLesson.technicalExample.toLowerCase()).toContain('header');
+    expect(result.mainLesson.technicalExample.toLowerCase()).toContain('<main>');
     expect(result.mainLesson.commonMisconceptions.length).toBeGreaterThan(0);
   });
 
