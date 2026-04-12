@@ -1,4 +1,5 @@
 import { lessonPackageSchema, type LessonPackageSchema } from '@insforge/shared-schemas';
+import { ConceptGroundingService } from './concept-grounding.service.js';
 import { SessionService } from './session.service.js';
 import { TutorService } from './tutor.service.js';
 
@@ -11,6 +12,7 @@ interface LessonPackagePrerequisiteInput {
 export class LessonPackageService {
   private sessionService = new SessionService();
   private tutorService = new TutorService();
+  private conceptGroundingService = new ConceptGroundingService();
 
   private isAcademicLessonPackage(value: unknown): value is LessonPackageSchema {
     return lessonPackageSchema.safeParse(value).success;
@@ -43,12 +45,26 @@ export class LessonPackageService {
       return currentLessonPackage;
     }
 
+    const graph = await this.sessionService.getGraph(input.sessionId);
+    const siblingConceptNames = graph.concepts
+      .filter((concept) => concept.id !== input.conceptId)
+      .map((concept) => concept.displayName);
+
+    const grounding = this.conceptGroundingService.extract({
+      conceptName: input.conceptName,
+      conceptDescription: input.conceptDescription,
+      siblingConceptNames,
+      sourceText: input.sourceText,
+    });
+
     if (currentLessonPackage) {
       const regeneratedLessonPackage = lessonPackageSchema.parse(
         await this.tutorService.generateLessonPackage({
           conceptName: input.conceptName,
           conceptDescription: input.conceptDescription,
+          grounding,
           sourceText: input.sourceText,
+          siblingConceptNames,
           masteryScore: input.masteryScore,
           missingPrerequisites: input.prerequisites,
           regenerationReason: 'academic_redesign',
@@ -80,7 +96,9 @@ export class LessonPackageService {
       await this.tutorService.generateLessonPackage({
         conceptName: input.conceptName,
         conceptDescription: input.conceptDescription,
+        grounding,
         sourceText: input.sourceText,
+        siblingConceptNames,
         masteryScore: input.masteryScore,
         missingPrerequisites: input.prerequisites,
         regenerationReason: 'initial',

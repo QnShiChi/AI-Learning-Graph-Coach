@@ -16,6 +16,12 @@ export const academicLessonSchema = z.object({
   commonMisconceptions: z.array(z.string()).default([]),
 });
 
+export const lessonGroundingSchema = z.object({
+  sourceExcerpt: z.string(),
+  sourceHighlights: z.array(z.string()).default([]),
+  quality: z.enum(['concept_specific', 'session_level', 'weak']),
+});
+
 export const lessonPackageSchema = z.object({
   version: z.number().int().min(1),
   formatVersion: z.literal(2),
@@ -27,6 +33,7 @@ export const lessonPackageSchema = z.object({
     'prerequisite_refresh',
     'academic_redesign',
   ]),
+  grounding: lessonGroundingSchema,
   mainLesson: academicLessonSchema,
   prerequisiteMiniLessons: z
     .array(
