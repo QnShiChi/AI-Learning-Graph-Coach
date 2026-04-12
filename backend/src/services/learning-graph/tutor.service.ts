@@ -1,9 +1,10 @@
 import { ChatCompletionService } from '@/services/ai/chat-completion.service.js';
 import {
   lessonPackageSchema,
-  type LessonPackageSchema,
   type ChatMessageSchema,
+  type LessonPackageSchema,
 } from '@insforge/shared-schemas';
+import { z } from 'zod';
 
 interface LessonPackagePrerequisiteInput {
   id: string;
@@ -11,8 +12,45 @@ interface LessonPackagePrerequisiteInput {
   description: string;
 }
 
+type TutorServiceDependencies = {
+  chatService?: Pick<ChatCompletionService, 'chat'>;
+};
+
+const llmAcademicLessonSchema = z.object({
+  definition: z.string(),
+  importance: z.string(),
+  corePoints: z.array(z.string()).min(2),
+  technicalExample: z.string(),
+  commonMisconceptions: z.array(z.string()).default([]),
+  prerequisiteMiniLessons: z
+    .array(
+      z.object({
+        prerequisiteConceptId: z.string().uuid(),
+        title: z.string(),
+        content: z.string(),
+      })
+    )
+    .default([]),
+});
+
+type LlmAcademicLesson = z.infer<typeof llmAcademicLessonSchema>;
+
 export class TutorService {
-  private chatService = ChatCompletionService.getInstance();
+  private chatService: Pick<ChatCompletionService, 'chat'>;
+
+  constructor(dependencies: TutorServiceDependencies = {}) {
+    this.chatService = dependencies.chatService ?? ChatCompletionService.getInstance();
+  }
+
+  private normalize(value: string) {
+    return value
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
   private toSentence(value: string) {
     const normalized = value.replace(/\s+/g, ' ').trim();
@@ -24,7 +62,7 @@ export class TutorService {
     return /[.!?…]$/.test(normalized) ? normalized : `${normalized}.`;
   }
 
-  private extractSourceHighlights(sourceText: string, maxItems = 4) {
+  private extractSourceHighlights(sourceText: string, maxItems = 6) {
     const bulletMatches = sourceText
       .split('\n')
       .map((line) => line.trim())
@@ -32,197 +70,15 @@ export class TutorService {
       .map((line) => line.replace(/^([-*•]|\d+\.)\s+/, '').trim())
       .filter(Boolean);
 
-    const highlights = (bulletMatches.length > 0
+    const highlights = bulletMatches.length
       ? bulletMatches
       : sourceText
           .split(/\r?\n/)
           .flatMap((line) => line.split(/[.!?]\s+/))
           .map((line) => line.trim())
-          .filter((line) => line.length > 24 && !line.endsWith(':'))) as string[];
+          .filter((line) => line.length > 20 && !line.endsWith(':'));
 
     return highlights.slice(0, maxItems);
-  }
-
-  private buildAcademicLesson(input: {
-    conceptName: string;
-    conceptDescription: string;
-    sourceHighlights: string[];
-  }) {
-    const descriptionSentence = this.toSentence(
-      input.conceptDescription ||
-        `${input.conceptName} là một phần kiến thức quan trọng trong phiên học hiện tại.`
-    );
-    const normalizedHighlights = input.sourceHighlights.map((item) => this.toSentence(item)).filter(Boolean);
-    const definition = normalizedHighlights[0] ?? descriptionSentence;
-    const importance =
-      normalizedHighlights[1] ??
-      `Hiểu rõ ${input.conceptName} giúp bạn đọc đúng cấu trúc, giải thích đúng cơ chế, và áp dụng kiến thức nhất quán hơn.`;
-    const corePoints = (normalizedHighlights.length > 0
-      ? normalizedHighlights.slice(0, 3)
-      : [descriptionSentence]
-    ).filter(Boolean);
-    const technicalExample =
-      normalizedHighlights.find((item) =>
-        /header|main|section|article|nav|footer|const |class |function |=>|<|>|\(|\)|\[|\]/i.test(item)
-      ) ??
-      `Ví dụ kỹ thuật: ${input.conceptName} được dùng trong ngữ cảnh ${input.conceptDescription.toLowerCase()}`;
-    const commonMisconceptions = [
-      `${input.conceptName} không nên bị hiểu chỉ như một mẹo ghi nhớ hay một phép so sánh đời thường.`,
-      normalizedHighlights[0]
-        ? `Không nên nhầm ${input.conceptName} với việc chỉ lặp lại nguyên văn ý "${normalizedHighlights[0]}".`
-        : '',
-    ].filter(Boolean);
-
-    return {
-      definition,
-      importance,
-      corePoints,
-      technicalExample,
-      commonMisconceptions,
-    };
-  }
-
-  private inferLessonMetaphor(input: {
-    conceptName: string;
-    conceptDescription: string;
-    sourceHighlights: string[];
-    primaryPrerequisite: LessonPackagePrerequisiteInput | null;
-  }) {
-    const combined = [
-      input.conceptName,
-      input.conceptDescription,
-      input.sourceHighlights.join(' '),
-    ]
-      .join(' ')
-      .toLowerCase();
-
-    if (
-      combined.includes('oop') ||
-      combined.includes('object') ||
-      combined.includes('class') ||
-      combined.includes('hướng đối tượng')
-    ) {
-      return {
-        shortMetaphor: 'một xưởng đóng xe có bản thiết kế treo trên tường và nhiều chiếc xe được tạo ra từ cùng bản thiết kế đó',
-        prompt:
-          'Hình dung OOP như một garage: trên tường có bản thiết kế của chiếc xe, còn dưới sàn là nhiều chiếc xe thật được tạo ra từ cùng bản thiết kế nhưng có màu sắc và trạng thái riêng.',
-        readingText:
-          'Trong hình này, bản thiết kế tượng trưng cho class, còn từng chiếc xe cụ thể tượng trưng cho object. Mỗi chiếc xe có dữ liệu riêng như màu sơn hay mức xăng, nhưng vẫn làm được các hành động giống nhau như nổ máy hoặc phanh.',
-        mappings: [
-          {
-            visualElement: 'Bản thiết kế treo trên tường',
-            everydayMeaning: 'Một mẫu chung để mọi chiếc xe cùng làm theo.',
-            technicalMeaning: 'Class định nghĩa cấu trúc dữ liệu và hành vi chung của object.',
-            teachingPurpose: 'Giúp người học phân biệt rõ class là khuôn mẫu, không phải vật thể đang chạy.',
-          },
-          {
-            visualElement: 'Nhiều chiếc xe thật trong garage',
-            everydayMeaning: 'Nhiều món đồ thật được tạo từ cùng một bản thiết kế.',
-            technicalMeaning: 'Object là thực thể cụ thể được tạo ra từ class với trạng thái riêng.',
-            teachingPurpose: 'Làm rõ mối liên hệ giữa class và object bằng ví dụ đời thường.',
-          },
-          {
-            visualElement: 'Nút nổ máy và vô-lăng của từng xe',
-            everydayMeaning: 'Mỗi chiếc xe có hành động riêng mà người lái có thể dùng.',
-            technicalMeaning: 'Method là hành vi của object, còn thuộc tính là dữ liệu như màu sắc hay tốc độ.',
-            teachingPurpose: 'Nối trực giác đời thường sang thuộc tính và phương thức.',
-          },
-        ],
-        technicalFocus:
-          'OOP tổ chức chương trình quanh class và object, trong đó class định nghĩa dữ liệu và hành vi chung còn object là thực thể cụ thể mang trạng thái riêng.',
-      };
-    }
-
-    if (combined.includes('gradient descent') || combined.includes('learning rate')) {
-      return {
-        shortMetaphor: 'một người đi xuống sườn núi trong sương mù, mỗi bước phải đủ nhỏ để không vượt quá điểm thấp nhất',
-        prompt:
-          'Hình dung Gradient Descent như một người đang đi xuống núi trong sương mù, phải dò hướng dốc nhất và chọn bước chân vừa phải để xuống thấp dần.',
-        readingText:
-          'Độ dốc trong hình tương ứng với gradient, còn độ dài bước chân là learning rate. Nếu bước quá dài, người đi có thể lố qua điểm thấp nhất; nếu quá ngắn thì xuống rất chậm.',
-        mappings: [
-          {
-            visualElement: 'Sườn núi dốc xuống',
-            everydayMeaning: 'Tìm cách đi xuống nơi thấp hơn.',
-            technicalMeaning: 'Loss surface cho biết mô hình đang ở vị trí tối ưu hay chưa.',
-            teachingPurpose: 'Giúp người học hình dung mục tiêu tối ưu là giảm loss.',
-          },
-          {
-            visualElement: 'Mũi tên chỉ hướng đi xuống',
-            everydayMeaning: 'Hướng dễ đi xuống nhất tại điểm hiện tại.',
-            technicalMeaning: 'Gradient chỉ hướng thay đổi lớn nhất, nên ta đi ngược gradient để giảm loss.',
-            teachingPurpose: 'Nối trực giác hướng dốc với cơ chế cập nhật tham số.',
-          },
-        ],
-        technicalFocus:
-          'Gradient descent cập nhật tham số theo hướng làm loss giảm dần, với learning rate quyết định độ lớn của mỗi lần cập nhật.',
-      };
-    }
-
-    const prerequisiteHint = input.primaryPrerequisite
-      ? ` Trước khi đi sâu hơn, hãy coi ${input.primaryPrerequisite.displayName} như phần chân đế đang đỡ toàn bộ khái niệm này.`
-      : '';
-
-    return {
-      shortMetaphor: `một bàn làm việc nơi mỗi ngăn kéo giữ một phần nhiệm vụ của ${input.conceptName}`,
-      prompt: `Hình dung ${input.conceptName} như một bàn làm việc gọn gàng: mỗi ngăn giữ một phần thông tin, còn người dùng chỉ mở đúng phần cần thiết để hoàn thành việc đang làm.${prerequisiteHint}`,
-      readingText: `Hình minh họa nhấn mạnh rằng ${input.conceptName} nên được hiểu qua những phần nhỏ, rõ vai trò, rồi mới ghép lại thành bức tranh kỹ thuật hoàn chỉnh.`,
-      mappings: [
-        {
-          visualElement: `Các ngăn kéo trên bàn làm việc của ${input.conceptName}`,
-          everydayMeaning: 'Mỗi ngăn giữ một phần việc riêng để người dùng không bị rối.',
-          technicalMeaning: `${input.conceptName} gồm nhiều ý nhỏ liên kết với nhau, mỗi ý đóng một vai trò riêng trong hệ thống.`,
-          teachingPurpose: 'Giúp người học chia nhỏ khái niệm trước khi ghép lại thành phần hiểu kỹ thuật.',
-        },
-      ],
-      technicalFocus: this.toSentence(input.conceptDescription),
-    };
-  }
-
-  private buildSvgDataUrl(input: {
-    title: string;
-    subtitle: string;
-    accentLabel: string;
-  }) {
-    const escape = (value: string) =>
-      value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
-        <defs>
-          <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stop-color="#13231d"/>
-            <stop offset="100%" stop-color="#203a63"/>
-          </linearGradient>
-        </defs>
-        <rect width="1200" height="720" rx="36" fill="url(#bg)"/>
-        <rect x="56" y="56" width="1088" height="608" rx="28" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)"/>
-        <text x="92" y="128" fill="#8ce7c1" font-size="26" font-family="Arial, sans-serif" letter-spacing="3">AN DU DOI THUONG</text>
-        <text x="92" y="216" fill="#ffffff" font-size="54" font-weight="700" font-family="Arial, sans-serif">${escape(input.title)}</text>
-        <foreignObject x="92" y="258" width="1016" height="220">
-          <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Arial, sans-serif; font-size: 28px; line-height: 1.45; color: rgba(255,255,255,0.92);">
-            ${escape(input.subtitle)}
-          </div>
-        </foreignObject>
-        <rect x="92" y="548" width="360" height="82" rx="18" fill="rgba(140,231,193,0.15)" stroke="rgba(140,231,193,0.35)"/>
-        <text x="122" y="599" fill="#d9fff0" font-size="28" font-weight="700" font-family="Arial, sans-serif">${escape(input.accentLabel)}</text>
-      </svg>
-    `;
-
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-  }
-
-  private toSlug(value: string) {
-    return value
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
   }
 
   private cleanExplanationOutput(value: string) {
@@ -251,7 +107,7 @@ export class TutorService {
     const seen = new Set<string>();
 
     for (const paragraph of cleanedParagraphs) {
-      const normalized = paragraph.toLowerCase().replace(/\s+/g, ' ').trim();
+      const normalized = this.normalize(paragraph);
       if (!normalized || seen.has(normalized)) {
         continue;
       }
@@ -263,42 +119,223 @@ export class TutorService {
     return uniqueParagraphs.join('\n\n').trim();
   }
 
-  private buildFeynmanExplanation(input: {
+  private dedupeLines(values: string[]) {
+    const seen = new Set<string>();
+
+    return values.filter((value) => {
+      const normalized = this.normalize(value);
+      if (!normalized || seen.has(normalized)) {
+        return false;
+      }
+
+      seen.add(normalized);
+      return true;
+    });
+  }
+
+  private buildLessonMessages(input: {
     conceptName: string;
     conceptDescription: string;
-    masteryScore: number;
-    missingPrerequisites: string[];
-    shortMetaphor: string;
-    sourceHighlights: string[];
-  }) {
-    const conceptName = input.conceptName.trim() || 'Khái niệm hiện tại';
-    const conceptDescription = this.toSentence(
-      input.conceptDescription.trim() ||
-        `${conceptName} là một phần kiến thức quan trọng trong phiên học hiện tại.`
-    );
-    const prerequisiteSentence =
+    sourceText: string;
+    missingPrerequisites: LessonPackagePrerequisiteInput[];
+    validationFeedback: string[];
+  }): ChatMessageSchema[] {
+    const prerequisiteBlock =
       input.missingPrerequisites.length > 0
-        ? `Để hiểu chắc hơn, hãy nối nó với ${input.missingPrerequisites.join(', ')} trước khi làm quiz.`
-        : 'Bạn có thể tập trung trực tiếp vào khái niệm này vì chưa có prerequisite nào đang thiếu.';
-    const masteryPercent = Math.round(input.masteryScore * 100);
-    const studyGoal =
-      masteryPercent >= 70
-        ? 'Bạn đã có nền tương đối ổn, nên mục tiêu là chốt lại trực giác và nối nó với ngôn ngữ kỹ thuật.'
-        : 'Mục tiêu của phần này là biến trực giác đời thường thành cách giải thích đủ đơn giản để bạn tự nói lại.';
-    const highlightSentence =
-      input.sourceHighlights.length > 0
-        ? `Điều cốt lõi bạn nên giữ trong đầu là ${input.sourceHighlights[0]!.replace(/^[A-ZÀ-Ỵ]/, (char) => char.toLowerCase())}.`
+        ? input.missingPrerequisites
+            .map(
+              (item) => `- ${item.displayName}: ${item.description} (id: ${item.id})`
+            )
+            .join('\n')
+        : '- không có';
+
+    const feedbackBlock =
+      input.validationFeedback.length > 0
+        ? `\nLần sinh trước bị từ chối vì:\n- ${input.validationFeedback.join('\n- ')}\nHãy sửa đúng các lỗi trên.`
         : '';
 
     return [
-      `${conceptName} có thể hiểu đơn giản như ${input.shortMetaphor}.`,
-      conceptDescription,
-      highlightSentence,
-      `Hiện mastery của bạn khoảng ${masteryPercent}%. ${studyGoal}`,
-      prerequisiteSentence,
-    ]
-      .filter(Boolean)
-      .join(' ');
+      {
+        role: 'user',
+        content: `Hãy tạo lesson học thuật bằng tiếng Việt cho khái niệm "${input.conceptName}".
+
+Mô tả khái niệm: ${input.conceptDescription}
+Nguồn học:
+${input.sourceText}
+
+Prerequisite còn thiếu:
+${prerequisiteBlock}
+
+Yêu cầu bắt buộc:
+- Trả về JSON hợp lệ với các key: definition, importance, corePoints, technicalExample, commonMisconceptions, prerequisiteMiniLessons
+- definition phải giải thích khái niệm là gì, không được chỉ lặp lại title
+- importance phải trả lời vì sao người học cần hiểu khái niệm này
+- corePoints phải có ít nhất 2 ý khác nhau
+- technicalExample phải là ví dụ kỹ thuật cụ thể, có code, markup, pattern, hoặc tình huống kỹ thuật rõ ràng
+- commonMisconceptions chỉ gồm các hiểu sai có thể xảy ra thật sự
+- Không dùng analogy mặc định, không giải thích theo kiểu Feynman, không viết giọng chatbot
+- prerequisiteMiniLessons chỉ gồm các prerequisite có trong danh sách đã cho
+${feedbackBlock}`,
+      },
+    ];
+  }
+
+  private validateAcademicLesson(input: {
+    conceptName: string;
+    lesson: LlmAcademicLesson;
+  }) {
+    const failures: string[] = [];
+    const normalizedConceptName = this.normalize(input.conceptName);
+    const normalizedDefinition = this.normalize(input.lesson.definition);
+    const normalizedImportance = this.normalize(input.lesson.importance);
+    const normalizedMisconceptions = input.lesson.commonMisconceptions.map((item) =>
+      this.normalize(item)
+    );
+
+    if (!normalizedDefinition || normalizedDefinition === normalizedConceptName) {
+      failures.push('definition is too close to concept title');
+    }
+
+    if (
+      normalizedDefinition.length < Math.max(24, normalizedConceptName.length + 8)
+    ) {
+      failures.push('definition is too short to explain the concept');
+    }
+
+    if (!normalizedImportance || normalizedImportance === normalizedDefinition) {
+      failures.push('importance does not explain practical or learning value');
+    }
+
+    const uniqueCorePoints = this.dedupeLines(input.lesson.corePoints);
+    if (uniqueCorePoints.length < 2) {
+      failures.push('corePoints must contain at least two distinct ideas');
+    }
+
+    const normalizedTechnicalExample = this.normalize(input.lesson.technicalExample);
+    const looksLikeCodeOrMarkup =
+      /[<>{}=()[\];]/.test(input.lesson.technicalExample) ||
+      /\b(const|let|function|return|class|async|await|fetch|SELECT|INSERT|UPDATE|DELETE)\b/i.test(
+        input.lesson.technicalExample
+      );
+    const looksLikePseudoExample = /^hieu vai tro cua|^hiểu vai trò của|^biet cach|^biết cách/i.test(
+      normalizedTechnicalExample
+    );
+    const mentionsConcreteUiPattern =
+      /\b(header|main|section|article|nav|footer)\b/i.test(input.lesson.technicalExample) &&
+      /<\s*(header|main|section|article|nav|footer)/i.test(input.lesson.technicalExample);
+
+    if ((!looksLikeCodeOrMarkup && !mentionsConcreteUiPattern) || looksLikePseudoExample) {
+      failures.push('technicalExample is descriptive but not an example');
+    }
+
+    if (
+      normalizedMisconceptions.some(
+        (item) =>
+          !item ||
+          item === normalizedDefinition ||
+          item.includes('khong nen hieu sai') ||
+          item.includes('khong nen nham')
+      )
+    ) {
+      failures.push('commonMisconceptions contains generic template text');
+    }
+
+    return failures;
+  }
+
+  private buildFallbackAcademicLesson(input: {
+    conceptName: string;
+    conceptDescription: string;
+    sourceText: string;
+  }) {
+    const descriptionSentence = this.toSentence(
+      input.conceptDescription ||
+        `${input.conceptName} là một phần kiến thức quan trọng trong phiên học hiện tại.`
+    );
+    const sourceHighlights = this.extractSourceHighlights(input.sourceText, 5).map((item) =>
+      this.toSentence(item)
+    );
+    const uniqueCorePoints = this.dedupeLines(sourceHighlights).slice(0, 3);
+    const importance =
+      uniqueCorePoints[0] ??
+      `Hiểu ${input.conceptName} giúp bạn đọc đúng cấu trúc, giải thích đúng cơ chế, và áp dụng kiến thức nhất quán hơn.`;
+
+    return {
+      definition: descriptionSentence,
+      importance: this.toSentence(importance),
+      corePoints:
+        uniqueCorePoints.length >= 2
+          ? uniqueCorePoints
+          : [
+              descriptionSentence,
+              `Nội dung nguồn hiện tại nhấn mạnh rằng ${input.conceptName} cần được hiểu đúng theo ngữ cảnh kỹ thuật.`,
+            ],
+      technicalExample:
+        'Ví dụ kỹ thuật cụ thể chưa được trích rõ từ nguồn học hiện tại; cần bổ sung source text chi tiết hơn.',
+      commonMisconceptions: [],
+    };
+  }
+
+  private async generateAcademicLessonWithRetry(input: {
+    conceptName: string;
+    conceptDescription: string;
+    sourceText: string;
+    missingPrerequisites: LessonPackagePrerequisiteInput[];
+  }) {
+    let validationFeedback: string[] = [];
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = await this.chatService.chat(
+          this.buildLessonMessages({
+            ...input,
+            validationFeedback,
+          }),
+          {
+            model: 'google/gemini-2.0-flash-lite-001',
+            temperature: attempt === 0 ? 0.2 : 0.1,
+          }
+        );
+
+        const parsed = llmAcademicLessonSchema.parse(JSON.parse(result.text || '{}'));
+        const failures = this.validateAcademicLesson({
+          conceptName: input.conceptName,
+          lesson: parsed,
+        });
+
+        if (failures.length === 0) {
+          return {
+            contentQuality: 'validated' as const,
+            lesson: {
+              definition: this.toSentence(parsed.definition),
+              importance: this.toSentence(parsed.importance),
+              corePoints: this.dedupeLines(parsed.corePoints.map((item) => this.toSentence(item))),
+              technicalExample: parsed.technicalExample.trim(),
+              commonMisconceptions: this.dedupeLines(
+                parsed.commonMisconceptions.map((item) => this.toSentence(item))
+              ),
+            },
+            prerequisiteMiniLessons: parsed.prerequisiteMiniLessons,
+          };
+        }
+
+        validationFeedback = failures;
+      } catch (error) {
+        validationFeedback = [
+          `invalid lesson output: ${error instanceof Error ? error.message : 'unknown parse error'}`,
+        ];
+      }
+    }
+
+    return {
+      contentQuality: 'fallback' as const,
+      lesson: this.buildFallbackAcademicLesson(input),
+      prerequisiteMiniLessons: input.missingPrerequisites.map((item) => ({
+        prerequisiteConceptId: item.id,
+        title: `Ôn lại ${item.displayName}`,
+        content: `${item.displayName}: ${item.description}`,
+      })),
+    };
   }
 
   async generateLessonPackage(input: {
@@ -317,32 +354,34 @@ export class TutorService {
     const sourceText =
       input.sourceText?.trim() ||
       `Nguồn học tập hiện tại xoay quanh ${conceptName} và cách áp dụng nó vào phiên học này.`;
-    const sourceHighlights = this.extractSourceHighlights(sourceText);
-    const mainLesson = this.buildAcademicLesson({
+
+    const lessonDraft = await this.generateAcademicLessonWithRetry({
       conceptName,
       conceptDescription,
-      sourceHighlights,
+      sourceText,
+      missingPrerequisites: input.missingPrerequisites,
     });
 
     return lessonPackageSchema.parse({
       version: input.version ?? 1,
       formatVersion: 2,
+      contentQuality: lessonDraft.contentQuality,
       regenerationReason: input.regenerationReason ?? 'initial',
-      mainLesson,
-      prerequisiteMiniLessons: input.missingPrerequisites.map((item) => ({
-        prerequisiteConceptId: item.id,
-        title: `Ôn lại ${item.displayName}`,
-        content: `${item.displayName}: ${item.description}`,
-      })),
+      mainLesson: lessonDraft.lesson,
+      prerequisiteMiniLessons: lessonDraft.prerequisiteMiniLessons,
     });
   }
 
   async generateExplanation(input: {
     conceptName: string;
-    conceptDescription: string;
+    conceptDescription?: string;
+    lessonSummary?: string;
+    sourceText?: string | null;
     masteryScore: number;
     missingPrerequisites: string[];
   }) {
+    const primarySource = input.lessonSummary?.trim() || input.conceptDescription?.trim() || '';
+    const secondarySource = input.sourceText?.trim() || 'không có';
     const messages: ChatMessageSchema[] = [
       {
         role: 'user',
@@ -354,8 +393,10 @@ Yêu cầu bắt buộc:
 - Không lặp lại cùng một ý theo nhiều câu gần giống nhau
 - Ưu tiên 3 đến 5 đoạn ngắn, mỗi đoạn tập trung một ý
 - Dùng ví dụ đời thường khi phù hợp, nhưng giữ văn phong gọn, trực tiếp
+- Nguồn chính: ${primarySource}
+- Nguồn phụ: ${secondarySource}
+- Không mâu thuẫn với nguồn chính; chỉ dùng nguồn phụ để diễn đạt mềm hơn khi cần
 
-Mô tả ngắn: "${input.conceptDescription}".
 Mức mastery hiện tại: ${input.masteryScore}.
 Các prerequisite còn thiếu: ${input.missingPrerequisites.join(', ') || 'không có'}.`,
       },

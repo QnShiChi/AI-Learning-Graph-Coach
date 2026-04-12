@@ -2,8 +2,155 @@ import { describe, expect, it, vi } from 'vitest';
 import { TutorService } from '@/services/learning-graph/tutor.service.js';
 
 describe('TutorService', () => {
+  it('retries when the first lesson output repeats the concept title and accepts the corrected retry', async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition: 'HTML semantic và cấu trúc trang',
+          importance: 'HTML semantic và cấu trúc trang',
+          corePoints: ['HTML semantic và cấu trúc trang', 'HTML semantic và cấu trúc trang'],
+          technicalExample: 'Hiểu vai trò của các thẻ như header, main, section.',
+          commonMisconceptions: ['Không nên hiểu sai.'],
+          prerequisiteMiniLessons: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+          importance:
+            'Nó giúp trình duyệt, công cụ hỗ trợ và lập trình viên hiểu cấu trúc trang rõ hơn khi đọc, bảo trì, và hỗ trợ accessibility.',
+          corePoints: [
+            'Các thẻ như header, nav, main, section, article, footer mang vai trò cấu trúc khác nhau.',
+            'Nên chọn thẻ theo nghĩa của nội dung thay vì dùng div cho mọi trường hợp.',
+          ],
+          technicalExample:
+            '<main><article><h1>Bài viết</h1><section>Nội dung chính</section></article></main>',
+          commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div sang thẻ khác cho đẹp mã.'],
+          prerequisiteMiniLessons: [],
+        }),
+      });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(result.contentQuality).toBe('validated');
+    expect(result.mainLesson.definition).toContain('Semantic HTML');
+  });
+
+  it('falls back to safe minimum content when every model attempt fails semantic validation', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        definition: 'HTML semantic và cấu trúc trang',
+        importance: 'HTML semantic và cấu trúc trang',
+        corePoints: ['HTML semantic và cấu trúc trang', 'HTML semantic và cấu trúc trang'],
+        technicalExample: 'Hiểu vai trò của các thẻ như header, main, section.',
+        commonMisconceptions: ['Không nên hiểu sai.'],
+        prerequisiteMiniLessons: [],
+      }),
+    });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(3);
+    expect(result.contentQuality).toBe('fallback');
+    expect(result.mainLesson.technicalExample).toContain('chưa được trích rõ');
+  });
+
+  it('rejects descriptive technicalExample text that is not a concrete example', async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả vai trò của từng phần nội dung.',
+          importance:
+            'Nó giúp trình duyệt và công cụ hỗ trợ hiểu cấu trúc trang tốt hơn.',
+          corePoints: [
+            'header, main, article, section, footer mang vai trò khác nhau.',
+            'Nên chọn thẻ theo nghĩa nội dung thay vì dùng div cho mọi thứ.',
+          ],
+          technicalExample:
+            'Hiểu vai trò của các thẻ như header, main, section, article, nav, footer.',
+          commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div.'],
+          prerequisiteMiniLessons: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả vai trò của từng phần nội dung.',
+          importance:
+            'Nó giúp trình duyệt và công cụ hỗ trợ hiểu cấu trúc trang tốt hơn.',
+          corePoints: [
+            'header, main, article, section, footer mang vai trò khác nhau.',
+            'Nên chọn thẻ theo nghĩa nội dung thay vì dùng div cho mọi thứ.',
+          ],
+          technicalExample:
+            '<header>...menu...</header><main><article><h1>Bài viết</h1></article></main>',
+          commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div.'],
+          prerequisiteMiniLessons: [],
+        }),
+      });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(result.mainLesson.technicalExample).toContain('<header>');
+  });
+
   it('builds an academic lesson package with structured mainLesson fields', async () => {
-    const service = new TutorService();
+    const service = new TutorService({
+      chatService: {
+        chat: vi.fn().mockResolvedValue({
+          text: JSON.stringify({
+            definition:
+              'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng phần nội dung trên trang.',
+            importance:
+              'Nó giúp trình duyệt, công cụ hỗ trợ và lập trình viên hiểu cấu trúc trang rõ hơn khi đọc, bảo trì, và hỗ trợ accessibility.',
+            corePoints: [
+              'Các thẻ như header, nav, main, section, article, footer mang vai trò cấu trúc khác nhau.',
+              'Nên chọn thẻ theo nghĩa của nội dung thay vì dùng div cho mọi trường hợp.',
+            ],
+            technicalExample:
+              '<main><article><h1>Bài viết</h1><section>Nội dung chính</section></article></main>',
+            commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div sang thẻ khác cho đẹp mã.'],
+            prerequisiteMiniLessons: [],
+          }),
+        }),
+      } as never,
+    });
 
     const result = await service.generateLessonPackage({
       conceptName: 'HTML semantic và cấu trúc trang',
@@ -18,11 +165,44 @@ describe('TutorService', () => {
     });
 
     expect(result.formatVersion).toBe(2);
+    expect(result.contentQuality).toBeDefined();
     expect(result.mainLesson.definition.toLowerCase()).toContain('semantic');
     expect(result.mainLesson.importance.length).toBeGreaterThan(0);
     expect(result.mainLesson.corePoints.length).toBeGreaterThan(0);
-    expect(result.mainLesson.technicalExample.toLowerCase()).toContain('header');
+    expect(result.mainLesson.technicalExample.toLowerCase()).toContain('<main>');
     expect(result.mainLesson.commonMisconceptions.length).toBeGreaterThan(0);
+  });
+
+  it('builds easy explanation from lesson summary first and source text second', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      text: 'Semantic HTML giúp người học hiểu vì sao mỗi vùng nội dung nên dùng đúng thẻ thay vì div chung chung.',
+    });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    await service.generateExplanation({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      lessonSummary:
+        'Semantic HTML dùng thẻ có ý nghĩa để mô tả cấu trúc. Điều này giúp accessibility và maintainability tốt hơn.',
+      sourceText:
+        'header, nav, main, article, section, footer là các thẻ semantic phổ biến trong layout trang.',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: expect.stringContaining('Nguồn chính: Semantic HTML dùng thẻ có ý nghĩa'),
+        }),
+        expect.objectContaining({
+          content: expect.stringContaining('Nguồn phụ: header, nav, main, article'),
+        }),
+      ]),
+      expect.any(Object)
+    );
   });
 
   it('cleans generated explanations so they read like teaching content instead of chatbot copy', async () => {

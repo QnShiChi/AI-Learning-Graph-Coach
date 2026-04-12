@@ -12,6 +12,7 @@ describe('LessonPackageService', () => {
     const persistedLessonPackage = {
       version: 1,
       formatVersion: 2 as const,
+      contentQuality: 'validated' as const,
       regenerationReason: 'initial' as const,
       mainLesson: {
         definition: 'Backpropagation là quá trình lan truyền sai số từ output về các tầng trước đó.',
@@ -65,6 +66,7 @@ describe('LessonPackageService', () => {
     const generatedLessonPackage = {
       version: 1,
       formatVersion: 2 as const,
+      contentQuality: 'validated' as const,
       regenerationReason: 'initial' as const,
       mainLesson: {
         definition:
@@ -140,6 +142,7 @@ describe('LessonPackageService', () => {
     const generatedLessonPackage = {
       version: 1,
       formatVersion: 2 as const,
+      contentQuality: 'validated' as const,
       regenerationReason: 'initial' as const,
       mainLesson: {
         definition:
@@ -194,6 +197,7 @@ describe('LessonPackageService', () => {
     const regeneratedLessonPackage = {
       version: 2,
       formatVersion: 2 as const,
+      contentQuality: 'validated' as const,
       regenerationReason: 'academic_redesign' as const,
       mainLesson: {
         definition: 'Semantic HTML dùng thẻ có ý nghĩa để mô tả cấu trúc nội dung.',
