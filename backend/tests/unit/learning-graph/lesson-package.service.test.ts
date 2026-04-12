@@ -98,6 +98,31 @@ Cần hiểu JSX, component, props, state.`,
 
   it('generates and persists an initial lesson package when the concept has no current one', async () => {
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage').mockResolvedValue(null);
+    vi.spyOn(SessionService.prototype, 'getGraph').mockResolvedValue({
+      concepts: [
+        {
+          id: '11111111-1111-1111-1111-111111111111',
+          sessionId: '55555555-5555-5555-5555-555555555555',
+          canonicalName: 'html-semantic',
+          displayName: 'HTML semantic và cấu trúc trang',
+          description: 'Semantic HTML mô tả vai trò nội dung.',
+          difficulty: 0.2,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: '66666666-6666-6666-6666-666666666666',
+          sessionId: '55555555-5555-5555-5555-555555555555',
+          canonicalName: 'backpropagation',
+          displayName: 'Backpropagation',
+          description: 'desc',
+          difficulty: 0.2,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      edges: [],
+    });
 
     const generatedLessonPackage = {
       version: 1,
@@ -163,7 +188,11 @@ Cần hiểu JSX, component, props, state.`,
     expect(generateLessonPackage).toHaveBeenCalledWith({
       conceptName: 'Backpropagation',
       conceptDescription: 'desc',
+      grounding: expect.objectContaining({
+        quality: 'concept_specific',
+      }),
       sourceText: 'Backpropagation lan truyền lỗi từ output về hidden layers.',
+      siblingConceptNames: ['HTML semantic và cấu trúc trang'],
       masteryScore: 0.2,
       missingPrerequisites: [
         {
@@ -214,6 +243,21 @@ Cần hiểu JSX, component, props, state.`,
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage')
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(generatedLessonPackage);
+    vi.spyOn(SessionService.prototype, 'getGraph').mockResolvedValue({
+      concepts: [
+        {
+          id: '66666666-6666-6666-6666-666666666666',
+          sessionId: '55555555-5555-5555-5555-555555555555',
+          canonicalName: 'gradient-descent',
+          displayName: 'Gradient Descent',
+          description: 'desc',
+          difficulty: 0.4,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      edges: [],
+    });
     vi.spyOn(TutorService.prototype, 'generateLessonPackage').mockResolvedValue(generatedLessonPackage);
     vi.spyOn(SessionService.prototype, 'insertLessonPackage').mockResolvedValue(false);
 
@@ -269,6 +313,31 @@ Cần hiểu JSX, component, props, state.`,
     vi.spyOn(SessionService.prototype, 'getCurrentLessonPackage')
       .mockResolvedValueOnce(legacyLessonPackage)
       .mockResolvedValueOnce(regeneratedLessonPackage);
+    vi.spyOn(SessionService.prototype, 'getGraph').mockResolvedValue({
+      concepts: [
+        {
+          id: '77777777-7777-7777-7777-777777777777',
+          sessionId: '55555555-5555-5555-5555-555555555555',
+          canonicalName: 'css-layout',
+          displayName: 'CSS layout và responsive design',
+          description: 'desc',
+          difficulty: 0.3,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: '66666666-6666-6666-6666-666666666666',
+          sessionId: '55555555-5555-5555-5555-555555555555',
+          canonicalName: 'html-semantic',
+          displayName: 'HTML semantic và cấu trúc trang',
+          description: 'Semantic HTML mô tả cấu trúc nội dung.',
+          difficulty: 0.2,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      edges: [],
+    });
     const generateLessonPackage = vi
       .spyOn(TutorService.prototype, 'generateLessonPackage')
       .mockResolvedValue(regeneratedLessonPackage);
@@ -291,7 +360,11 @@ Cần hiểu JSX, component, props, state.`,
     expect(generateLessonPackage).toHaveBeenCalledWith({
       conceptName: 'HTML semantic và cấu trúc trang',
       conceptDescription: 'Semantic HTML mô tả cấu trúc nội dung.',
+      grounding: expect.objectContaining({
+        quality: 'session_level',
+      }),
       sourceText: 'Semantic HTML mô tả vai trò của từng vùng nội dung.',
+      siblingConceptNames: ['CSS layout và responsive design'],
       masteryScore: 0,
       missingPrerequisites: [],
       regenerationReason: 'academic_redesign',
