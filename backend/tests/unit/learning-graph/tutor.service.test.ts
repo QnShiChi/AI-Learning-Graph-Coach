@@ -1,6 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TutorService } from '@/services/learning-graph/tutor.service.js';
 
+const componentGrounding = {
+  sourceExcerpt:
+    'Giao diện nên được chia thành các phần nhỏ có trách nhiệm rõ ràng. Mỗi component nên đại diện cho một phần UI độc lập như button, form, card, modal, navbar hoặc task item.',
+  sourceHighlights: [
+    'Giao diện nên được chia thành các phần nhỏ có trách nhiệm rõ ràng.',
+    'Mỗi component nên đại diện cho một phần UI độc lập như button, form, card, modal, navbar hoặc task item.',
+  ],
+  quality: 'concept_specific' as const,
+};
+
+const semanticGrounding = {
+  sourceExcerpt:
+    'Semantic HTML là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside, footer để mô tả đúng vai trò của từng phần nội dung trên trang.',
+  sourceHighlights: [
+    'Semantic HTML là cách dùng các thẻ có ý nghĩa như header, nav, main, section, article, aside, footer.',
+    'Các thẻ semantic mô tả đúng vai trò của từng phần nội dung trên trang.',
+  ],
+  quality: 'concept_specific' as const,
+};
+
 describe('TutorService', () => {
   it('retries when the first lesson output repeats the concept title and accepts the corrected retry', async () => {
     const chat = vi
@@ -39,7 +59,9 @@ describe('TutorService', () => {
     const result = await service.generateLessonPackage({
       conceptName: 'HTML semantic và cấu trúc trang',
       conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      grounding: semanticGrounding,
       sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      siblingConceptNames: ['CSS layout và responsive design', 'JavaScript nền tảng'],
       masteryScore: 0,
       missingPrerequisites: [],
     });
@@ -68,7 +90,9 @@ describe('TutorService', () => {
     const result = await service.generateLessonPackage({
       conceptName: 'HTML semantic và cấu trúc trang',
       conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      grounding: semanticGrounding,
       sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      siblingConceptNames: ['CSS layout và responsive design', 'JavaScript nền tảng'],
       masteryScore: 0,
       missingPrerequisites: [],
     });
@@ -121,7 +145,9 @@ describe('TutorService', () => {
     const result = await service.generateLessonPackage({
       conceptName: 'HTML semantic và cấu trúc trang',
       conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      grounding: semanticGrounding,
       sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      siblingConceptNames: ['CSS layout và responsive design', 'JavaScript nền tảng'],
       masteryScore: 0,
       missingPrerequisites: [],
     });
@@ -156,10 +182,12 @@ describe('TutorService', () => {
       conceptName: 'HTML semantic và cấu trúc trang',
       conceptDescription:
         'Semantic HTML dùng các thẻ có ý nghĩa để mô tả cấu trúc nội dung.',
+      grounding: semanticGrounding,
       sourceText: `Các ý chính cần bám vào:
 - semantic HTML giúp trình duyệt và công cụ hỗ trợ hiểu vai trò của từng vùng nội dung
 - thẻ như header, main, section, article, nav, footer mô tả cấu trúc trang
 - cấu trúc rõ ràng giúp bảo trì và accessibility tốt hơn`,
+      siblingConceptNames: ['CSS layout và responsive design', 'JavaScript nền tảng'],
       masteryScore: 0,
       missingPrerequisites: [],
     });
@@ -171,6 +199,82 @@ describe('TutorService', () => {
     expect(result.mainLesson.corePoints.length).toBeGreaterThan(0);
     expect(result.mainLesson.technicalExample.toLowerCase()).toContain('<main>');
     expect(result.mainLesson.commonMisconceptions.length).toBeGreaterThan(0);
+  });
+
+  it('rejects a lesson for component organization when the output centers on HTML semantic instead', async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition: 'Component là cách chia giao diện thành phần nhỏ.',
+          importance: 'HTML semantic giúp trình duyệt hiểu cấu trúc trang tốt hơn.',
+          corePoints: [
+            'HTML semantic và cấu trúc trang.',
+            'CSS layout và responsive design.',
+          ],
+          technicalExample: '<header><nav>...</nav></header>',
+          commonMisconceptions: [],
+          prerequisiteMiniLessons: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition: 'Component là cách chia giao diện thành phần nhỏ có trách nhiệm rõ ràng.',
+          importance: 'Nó giúp giao diện dễ tái sử dụng, bảo trì, và tách logic theo từng phần UI.',
+          corePoints: [
+            'Mỗi component nên có trách nhiệm rõ ràng.',
+            'Component giúp tái sử dụng UI và cô lập thay đổi.',
+          ],
+          technicalExample: '<TaskCard title="Fix bug" status="doing" />',
+          commonMisconceptions: [
+            'Component không đồng nghĩa với việc mọi phần tử nhỏ đều phải tách file riêng.',
+          ],
+          prerequisiteMiniLessons: [],
+        }),
+      });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'Tổ chức giao diện thành component',
+      conceptDescription: 'Chia giao diện thành các phần nhỏ có trách nhiệm rõ ràng.',
+      grounding: componentGrounding,
+      sourceText: 'outline toàn session',
+      siblingConceptNames: [
+        'HTML semantic và cấu trúc trang',
+        'CSS layout và responsive design',
+        'JavaScript nền tảng',
+      ],
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(result.mainLesson.importance).toContain('tái sử dụng');
+  });
+
+  it('falls back to grounding excerpt before full session source when grounded generation keeps failing', async () => {
+    const chat = vi.fn().mockRejectedValue(new Error('upstream failure'));
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'Tổ chức giao diện thành component',
+      conceptDescription: 'Chia giao diện thành các phần nhỏ có trách nhiệm rõ ràng.',
+      grounding: componentGrounding,
+      sourceText: 'outline toàn session có HTML semantic và CSS layout',
+      siblingConceptNames: ['HTML semantic và cấu trúc trang'],
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(result.contentQuality).toBe('fallback');
+    expect(result.grounding.quality).toBe('concept_specific');
+    expect(result.mainLesson.definition).toContain('Chia giao diện');
+    expect(result.mainLesson.corePoints.join(' ')).not.toContain('HTML semantic');
   });
 
   it('builds easy explanation from lesson summary first and source text second', async () => {

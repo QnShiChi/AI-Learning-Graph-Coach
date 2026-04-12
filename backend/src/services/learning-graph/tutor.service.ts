@@ -34,6 +34,7 @@ const llmAcademicLessonSchema = z.object({
 });
 
 type LlmAcademicLesson = z.infer<typeof llmAcademicLessonSchema>;
+type LessonGrounding = LessonPackageSchema['grounding'];
 
 export class TutorService {
   private chatService: Pick<ChatCompletionService, 'chat'>;
@@ -133,10 +134,78 @@ export class TutorService {
     });
   }
 
+  private filterSiblingConceptBleed(values: string[], siblingConceptNames: string[]) {
+    return values.filter((value) => {
+      const normalizedValue = this.normalize(value);
+      return !siblingConceptNames.some((name) =>
+        normalizedValue.includes(this.normalize(name))
+      );
+    });
+  }
+
+  private extractKeywords(values: string[]) {
+    const stopWords = new Set([
+      'va',
+      'voi',
+      'cho',
+      'khi',
+      'nhung',
+      'nhieu',
+      'mot',
+      'moi',
+      'cac',
+      'the',
+      'giup',
+      'nguoi',
+      'hoc',
+      'hieu',
+      'tren',
+      'trong',
+      'theo',
+      'duoc',
+      'nhu',
+      'phan',
+      'giao',
+      'dien',
+      'thanh',
+      'co',
+      'roi',
+      'rang',
+      'ung',
+      'dung',
+      'html',
+      'css',
+      'javascript',
+    ]);
+
+    return Array.from(
+      new Set(
+        values
+          .flatMap((value) => this.normalize(value).split(' '))
+          .filter((token) => token.length >= 4 && !stopWords.has(token))
+      )
+    );
+  }
+
+  private groundingOverlapCount(input: {
+    text: string;
+    grounding: LessonGrounding;
+  }) {
+    const lessonTokens = new Set(this.extractKeywords([input.text]));
+    const groundingTokens = this.extractKeywords([
+      input.grounding.sourceExcerpt,
+      ...input.grounding.sourceHighlights,
+    ]);
+
+    return groundingTokens.filter((token) => lessonTokens.has(token)).length;
+  }
+
   private buildLessonMessages(input: {
     conceptName: string;
     conceptDescription: string;
+    grounding: LessonGrounding;
     sourceText: string;
+    siblingConceptNames: string[];
     missingPrerequisites: LessonPackagePrerequisiteInput[];
     validationFeedback: string[];
   }): ChatMessageSchema[] {
@@ -153,6 +222,14 @@ export class TutorService {
       input.validationFeedback.length > 0
         ? `\nLần sinh trước bị từ chối vì:\n- ${input.validationFeedback.join('\n- ')}\nHãy sửa đúng các lỗi trên.`
         : '';
+    const groundingHighlights =
+      input.grounding.sourceHighlights.length > 0
+        ? input.grounding.sourceHighlights.map((item) => `- ${item}`).join('\n')
+        : '- không có';
+    const siblingConceptBlock =
+      input.siblingConceptNames.length > 0
+        ? input.siblingConceptNames.map((item) => `- ${item}`).join('\n')
+        : '- không có';
 
     return [
       {
@@ -160,8 +237,17 @@ export class TutorService {
         content: `Hãy tạo lesson học thuật bằng tiếng Việt cho khái niệm "${input.conceptName}".
 
 Mô tả khái niệm: ${input.conceptDescription}
-Nguồn học:
+Grounding chính cho khái niệm này:
+${input.grounding.sourceExcerpt}
+
+Các highlight đã được trích riêng cho khái niệm:
+${groundingHighlights}
+
+Nguồn toàn session chỉ dùng làm tham khảo phụ khi grounding còn thiếu:
 ${input.sourceText}
+
+Các concept khác trong cùng session, không được biến thành trọng tâm của lesson:
+${siblingConceptBlock}
 
 Prerequisite còn thiếu:
 ${prerequisiteBlock}
@@ -173,6 +259,7 @@ Yêu cầu bắt buộc:
 - corePoints phải có ít nhất 2 ý khác nhau
 - technicalExample phải là ví dụ kỹ thuật cụ thể, có code, markup, pattern, hoặc tình huống kỹ thuật rõ ràng
 - commonMisconceptions chỉ gồm các hiểu sai có thể xảy ra thật sự
+- Tập trung vào grounding của chính concept này; không lặp lại ý chính của các concept khác trong session
 - Không dùng analogy mặc định, không giải thích theo kiểu Feynman, không viết giọng chatbot
 - prerequisiteMiniLessons chỉ gồm các prerequisite có trong danh sách đã cho
 ${feedbackBlock}`,
@@ -183,6 +270,8 @@ ${feedbackBlock}`,
   private validateAcademicLesson(input: {
     conceptName: string;
     lesson: LlmAcademicLesson;
+    grounding: LessonGrounding;
+    siblingConceptNames: string[];
   }) {
     const failures: string[] = [];
     const normalizedConceptName = this.normalize(input.conceptName);
@@ -240,20 +329,55 @@ ${feedbackBlock}`,
       failures.push('commonMisconceptions contains generic template text');
     }
 
+    const lessonBody = [
+      input.lesson.definition,
+      input.lesson.importance,
+      ...input.lesson.corePoints,
+      input.lesson.technicalExample,
+      ...input.lesson.commonMisconceptions,
+    ].join(' ');
+    const siblingMentions = input.siblingConceptNames.filter((name) =>
+      this.normalize(lessonBody).includes(this.normalize(name))
+    );
+    if (siblingMentions.length > 0) {
+      failures.push(
+        `lesson content drifts into sibling concepts: ${siblingMentions.join(', ')}`
+      );
+    }
+
+    if (input.grounding.quality === 'concept_specific') {
+      const overlapCount = this.groundingOverlapCount({
+        text: lessonBody,
+        grounding: input.grounding,
+      });
+
+      if (overlapCount < 2) {
+        failures.push('lesson is not grounded strongly enough in the concept excerpt');
+      }
+    }
+
     return failures;
   }
 
   private buildFallbackAcademicLesson(input: {
     conceptName: string;
     conceptDescription: string;
+    grounding: LessonGrounding;
     sourceText: string;
+    siblingConceptNames: string[];
   }) {
     const descriptionSentence = this.toSentence(
       input.conceptDescription ||
         `${input.conceptName} là một phần kiến thức quan trọng trong phiên học hiện tại.`
     );
-    const sourceHighlights = this.extractSourceHighlights(input.sourceText, 5).map((item) =>
-      this.toSentence(item)
+    const primarySource = input.grounding.sourceExcerpt.trim() || input.sourceText;
+    const sourceHighlights = this.filterSiblingConceptBleed(
+      (
+        input.grounding.sourceHighlights.length > 0
+          ? input.grounding.sourceHighlights
+          : this.extractSourceHighlights(primarySource, 5)
+      ).map((item) => this.toSentence(item)),
+      input.siblingConceptNames
     );
     const uniqueCorePoints = this.dedupeLines(sourceHighlights).slice(0, 3);
     const importance =
@@ -279,7 +403,9 @@ ${feedbackBlock}`,
   private async generateAcademicLessonWithRetry(input: {
     conceptName: string;
     conceptDescription: string;
+    grounding: LessonGrounding;
     sourceText: string;
+    siblingConceptNames: string[];
     missingPrerequisites: LessonPackagePrerequisiteInput[];
   }) {
     let validationFeedback: string[] = [];
@@ -301,6 +427,8 @@ ${feedbackBlock}`,
         const failures = this.validateAcademicLesson({
           conceptName: input.conceptName,
           lesson: parsed,
+          grounding: input.grounding,
+          siblingConceptNames: input.siblingConceptNames,
         });
 
         if (failures.length === 0) {
@@ -341,7 +469,9 @@ ${feedbackBlock}`,
   async generateLessonPackage(input: {
     conceptName: string;
     conceptDescription: string;
+    grounding: LessonGrounding;
     sourceText: string | null;
+    siblingConceptNames: string[];
     masteryScore: number;
     missingPrerequisites: LessonPackagePrerequisiteInput[];
     regenerationReason?: LessonPackageSchema['regenerationReason'];
@@ -358,7 +488,9 @@ ${feedbackBlock}`,
     const lessonDraft = await this.generateAcademicLessonWithRetry({
       conceptName,
       conceptDescription,
+      grounding: input.grounding,
       sourceText,
+      siblingConceptNames: input.siblingConceptNames,
       missingPrerequisites: input.missingPrerequisites,
     });
 
@@ -367,6 +499,7 @@ ${feedbackBlock}`,
       formatVersion: 2,
       contentQuality: lessonDraft.contentQuality,
       regenerationReason: input.regenerationReason ?? 'initial',
+      grounding: input.grounding,
       mainLesson: lessonDraft.lesson,
       prerequisiteMiniLessons: lessonDraft.prerequisiteMiniLessons,
     });

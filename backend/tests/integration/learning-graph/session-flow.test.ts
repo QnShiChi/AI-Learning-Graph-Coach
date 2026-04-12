@@ -481,6 +481,14 @@ describe('LearningOrchestratorService', () => {
       formatVersion: 2,
       contentQuality: 'validated',
       regenerationReason: 'initial',
+      grounding: {
+        sourceExcerpt: 'OOP tổ chức chương trình quanh object và class.',
+        sourceHighlights: [
+          'Class là khuôn mẫu.',
+          'Object là thực thể được tạo ra từ class.',
+        ],
+        quality: 'concept_specific',
+      },
       mainLesson: {
         definition: 'OOP tổ chức chương trình quanh object và class.',
         importance: 'Giúp mô hình hóa dữ liệu và hành vi theo từng thực thể.',
@@ -554,6 +562,14 @@ describe('LearningOrchestratorService', () => {
       formatVersion: 2,
       contentQuality: 'validated',
       regenerationReason: 'initial',
+      grounding: {
+        sourceExcerpt: 'OOP tổ chức chương trình quanh object và class.',
+        sourceHighlights: [
+          'Class là khuôn mẫu.',
+          'Object là thực thể được tạo ra từ class.',
+        ],
+        quality: 'concept_specific',
+      },
       mainLesson: {
         definition: 'OOP tổ chức chương trình quanh object và class.',
         importance: 'Giúp mô hình hóa dữ liệu và hành vi theo từng thực thể.',
