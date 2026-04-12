@@ -19,6 +19,7 @@ export const academicLessonSchema = z.object({
 export const lessonPackageSchema = z.object({
   version: z.number().int().min(1),
   formatVersion: z.literal(2),
+  contentQuality: z.enum(['validated', 'fallback']),
   regenerationReason: z.enum([
     'initial',
     'failed_quiz',

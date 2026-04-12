@@ -2,6 +2,82 @@ import { describe, expect, it, vi } from 'vitest';
 import { TutorService } from '@/services/learning-graph/tutor.service.js';
 
 describe('TutorService', () => {
+  it('retries when the first lesson output repeats the concept title and accepts the corrected retry', async () => {
+    const chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition: 'HTML semantic và cấu trúc trang',
+          importance: 'HTML semantic và cấu trúc trang',
+          corePoints: ['HTML semantic và cấu trúc trang', 'HTML semantic và cấu trúc trang'],
+          technicalExample: 'Hiểu vai trò của các thẻ như header, main, section.',
+          commonMisconceptions: ['Không nên hiểu sai.'],
+          prerequisiteMiniLessons: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          definition:
+            'Semantic HTML là cách dùng các thẻ có ý nghĩa để mô tả đúng vai trò của từng vùng nội dung trên trang.',
+          importance:
+            'Nó giúp trình duyệt, công cụ hỗ trợ và lập trình viên hiểu cấu trúc trang rõ hơn khi đọc, bảo trì, và hỗ trợ accessibility.',
+          corePoints: [
+            'Các thẻ như header, nav, main, section, article, footer mang vai trò cấu trúc khác nhau.',
+            'Nên chọn thẻ theo nghĩa của nội dung thay vì dùng div cho mọi trường hợp.',
+          ],
+          technicalExample:
+            '<main><article><h1>Bài viết</h1><section>Nội dung chính</section></article></main>',
+          commonMisconceptions: ['Semantic HTML không chỉ là đổi tên div sang thẻ khác cho đẹp mã.'],
+          prerequisiteMiniLessons: [],
+        }),
+      });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(result.contentQuality).toBe('validated');
+    expect(result.mainLesson.definition).toContain('Semantic HTML');
+  });
+
+  it('falls back to safe minimum content when every model attempt fails semantic validation', async () => {
+    const chat = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        definition: 'HTML semantic và cấu trúc trang',
+        importance: 'HTML semantic và cấu trúc trang',
+        corePoints: ['HTML semantic và cấu trúc trang', 'HTML semantic và cấu trúc trang'],
+        technicalExample: 'Hiểu vai trò của các thẻ như header, main, section.',
+        commonMisconceptions: ['Không nên hiểu sai.'],
+        prerequisiteMiniLessons: [],
+      }),
+    });
+
+    const service = new TutorService({
+      chatService: { chat } as never,
+    });
+
+    const result = await service.generateLessonPackage({
+      conceptName: 'HTML semantic và cấu trúc trang',
+      conceptDescription: 'Semantic HTML mô tả đúng ý nghĩa của từng phần nội dung.',
+      sourceText: 'header, nav, main, article, section, footer; accessibility; maintainability',
+      masteryScore: 0,
+      missingPrerequisites: [],
+    });
+
+    expect(chat).toHaveBeenCalledTimes(3);
+    expect(result.contentQuality).toBe('fallback');
+    expect(result.mainLesson.technicalExample).toContain('chưa được trích rõ');
+  });
+
   it('builds an academic lesson package with structured mainLesson fields', async () => {
     const service = new TutorService();
 
@@ -18,6 +94,7 @@ describe('TutorService', () => {
     });
 
     expect(result.formatVersion).toBe(2);
+    expect(result.contentQuality).toBeDefined();
     expect(result.mainLesson.definition.toLowerCase()).toContain('semantic');
     expect(result.mainLesson.importance.length).toBeGreaterThan(0);
     expect(result.mainLesson.corePoints.length).toBeGreaterThan(0);
