@@ -6,6 +6,7 @@ import { MasteryService } from './mastery.service.js';
 import { PathEngineService } from './path-engine.service.js';
 import { QuizService } from './quiz.service.js';
 import { SessionService } from './session.service.js';
+import { LessonWarmupService } from './lesson-warmup.service.js';
 import { TutorService } from './tutor.service.js';
 import { VoiceTutorService } from './voice-tutor.service.js';
 import { AppError } from '@/api/middlewares/error.js';
@@ -24,6 +25,7 @@ export class LearningOrchestratorService {
   private quizService = new QuizService();
   private tutorService = new TutorService();
   private voiceTutorService = new VoiceTutorService();
+  private lessonWarmupService = new LessonWarmupService();
 
   private buildPrerequisiteMap(
     edges: Array<{ fromConceptId: string; toConceptId: string; edgeType: string }>
@@ -176,6 +178,16 @@ export class LearningOrchestratorService {
     await this.sessionService.markSessionReady({
       sessionId: session.id,
       currentConceptId: persistedCurrentConceptId,
+    });
+
+    const warmupPlan = await this.lessonWarmupService.buildWarmupPlan(session.id);
+    await this.lessonWarmupService.warmConcepts({
+      sessionId: session.id,
+      conceptIds: warmupPlan.initialConceptIds,
+    });
+    this.lessonWarmupService.scheduleConcepts({
+      sessionId: session.id,
+      conceptIds: warmupPlan.backgroundConceptIds,
     });
 
     return {
