@@ -61,6 +61,15 @@ export class LessonPackageService {
     return Number.isFinite(version) && version >= 1 ? version + 1 : 1;
   }
 
+  async hasCurrentReadyLessonPackage(sessionId: string, conceptId: string) {
+    const currentLessonPackage = await this.sessionService.getCurrentLessonPackage(sessionId, conceptId);
+
+    return (
+      this.isAcademicLessonPackage(currentLessonPackage) &&
+      !this.shouldRegenerateLessonPackage(currentLessonPackage)
+    );
+  }
+
   async getOrCreateCurrentLessonPackage(input: {
     sessionId: string;
     conceptId: string;

@@ -3,6 +3,7 @@ import { AppError } from '@/api/middlewares/error.js';
 import { LearningOrchestratorService } from '@/services/learning-graph/learning-orchestrator.service.js';
 import { SessionService } from '@/services/learning-graph/session.service.js';
 import { GraphGenerationService } from '@/services/learning-graph/graph-generation.service.js';
+import { LessonWarmupService } from '@/services/learning-graph/lesson-warmup.service.js';
 import { TutorService } from '@/services/learning-graph/tutor.service.js';
 import { VoiceTutorService } from '@/services/learning-graph/voice-tutor.service.js';
 import { ChatCompletionService } from '@/services/ai/chat-completion.service.js';
@@ -27,6 +28,12 @@ describe('LearningOrchestratorService', () => {
     const updateStatus = vi
       .spyOn(SessionService.prototype, 'markSessionReady')
       .mockResolvedValue(undefined);
+    vi.spyOn(LessonWarmupService.prototype, 'buildWarmupPlan').mockResolvedValue({
+      initialConceptIds: ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+      backgroundConceptIds: ['bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'],
+    });
+    vi.spyOn(LessonWarmupService.prototype, 'warmConcepts').mockResolvedValue(undefined);
+    vi.spyOn(LessonWarmupService.prototype, 'scheduleConcepts').mockImplementation(() => {});
 
     vi.spyOn(SessionService.prototype, 'createLearningSession').mockResolvedValue({
       id: '11111111-1111-1111-1111-111111111111',
@@ -77,6 +84,153 @@ describe('LearningOrchestratorService', () => {
       sessionId: '11111111-1111-1111-1111-111111111111',
       currentConceptId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     });
+  });
+
+  it('warms the first three concepts before returning a new session and schedules the remaining concepts in background', async () => {
+    vi.spyOn(SessionService.prototype, 'createLearningSession').mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      goal_title: 'Kinh te hoc',
+      source_topic: 'Kinh te hoc',
+      source_text: 'Cau, cung, can bang, du cung',
+      status: 'initializing',
+      current_concept_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    vi.spyOn(GraphGenerationService.prototype, 'generate').mockResolvedValue({
+      sessionGoal: 'Kinh te hoc',
+      concepts: [
+        {
+          tempId: 'c1',
+          displayName: 'Cau',
+          canonicalName: 'demand',
+          description: 'desc',
+          difficulty: 0.1,
+        },
+        {
+          tempId: 'c2',
+          displayName: 'Cung',
+          canonicalName: 'supply',
+          description: 'desc',
+          difficulty: 0.2,
+        },
+        {
+          tempId: 'c3',
+          displayName: 'Can bang thi truong',
+          canonicalName: 'equilibrium',
+          description: 'desc',
+          difficulty: 0.3,
+        },
+        {
+          tempId: 'c4',
+          displayName: 'Du cung',
+          canonicalName: 'surplus',
+          description: 'desc',
+          difficulty: 0.4,
+        },
+      ],
+      edges: [],
+    });
+    vi.spyOn(SessionService.prototype, 'persistValidatedGraph').mockResolvedValue({
+      conceptIdByTempId: new Map([
+        ['c1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+        ['c2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'],
+        ['c3', 'cccccccc-cccc-cccc-cccc-cccccccccccc'],
+        ['c4', 'dddddddd-dddd-dddd-dddd-dddddddddddd'],
+      ]),
+    });
+    vi.spyOn(SessionService.prototype, 'persistPathSnapshot').mockResolvedValue();
+    vi.spyOn(SessionService.prototype, 'markSessionReady').mockResolvedValue(undefined);
+    const buildWarmupPlan = vi.spyOn(LessonWarmupService.prototype, 'buildWarmupPlan').mockResolvedValue({
+      initialConceptIds: [
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      ],
+      backgroundConceptIds: ['dddddddd-dddd-dddd-dddd-dddddddddddd'],
+    });
+    const warmConcepts = vi
+      .spyOn(LessonWarmupService.prototype, 'warmConcepts')
+      .mockResolvedValue(undefined);
+    const scheduleConcepts = vi
+      .spyOn(LessonWarmupService.prototype, 'scheduleConcepts')
+      .mockImplementation(() => {});
+
+    const service = new LearningOrchestratorService();
+    const result = await service.createSession({
+      userId: '11111111-1111-1111-1111-111111111111',
+      topic: 'Kinh te hoc',
+      sourceText: 'Cau, cung, can bang, du cung',
+    });
+
+    expect(buildWarmupPlan).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
+    expect(warmConcepts).toHaveBeenCalledWith({
+      sessionId: '11111111-1111-1111-1111-111111111111',
+      conceptIds: [
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      ],
+    });
+    expect(scheduleConcepts).toHaveBeenCalledWith({
+      sessionId: '11111111-1111-1111-1111-111111111111',
+      conceptIds: ['dddddddd-dddd-dddd-dddd-dddddddddddd'],
+    });
+    expect(result.session.status).toBe('ready');
+  });
+
+  it('fails session creation when synchronous lesson warmup for the first concepts fails', async () => {
+    vi.spyOn(SessionService.prototype, 'createLearningSession').mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+      user_id: '11111111-1111-1111-1111-111111111111',
+      goal_title: 'Kinh te hoc',
+      source_topic: 'Kinh te hoc',
+      source_text: 'Cau, cung, can bang, du cung',
+      status: 'initializing',
+      current_concept_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    vi.spyOn(GraphGenerationService.prototype, 'generate').mockResolvedValue({
+      sessionGoal: 'Kinh te hoc',
+      concepts: [
+        {
+          tempId: 'c1',
+          displayName: 'Cau',
+          canonicalName: 'demand',
+          description: 'desc',
+          difficulty: 0.1,
+        },
+      ],
+      edges: [],
+    });
+    vi.spyOn(SessionService.prototype, 'persistValidatedGraph').mockResolvedValue({
+      conceptIdByTempId: new Map([['c1', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa']]),
+    });
+    vi.spyOn(SessionService.prototype, 'persistPathSnapshot').mockResolvedValue();
+    vi.spyOn(SessionService.prototype, 'markSessionReady').mockResolvedValue(undefined);
+    vi.spyOn(LessonWarmupService.prototype, 'buildWarmupPlan').mockResolvedValue({
+      initialConceptIds: ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+      backgroundConceptIds: [],
+    });
+    vi.spyOn(LessonWarmupService.prototype, 'warmConcepts').mockRejectedValue(
+      new Error('warmup failed')
+    );
+    const scheduleConcepts = vi
+      .spyOn(LessonWarmupService.prototype, 'scheduleConcepts')
+      .mockImplementation(() => {});
+
+    const service = new LearningOrchestratorService();
+
+    await expect(
+      service.createSession({
+        userId: '11111111-1111-1111-1111-111111111111',
+        topic: 'Kinh te hoc',
+        sourceText: 'Cau, cung, can bang, du cung',
+      })
+    ).rejects.toThrow('warmup failed');
+    expect(scheduleConcepts).not.toHaveBeenCalled();
   });
 
   it('submits a persisted quiz attempt, updates mastery, and returns a refreshed path snapshot', async () => {
